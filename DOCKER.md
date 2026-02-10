@@ -36,7 +36,6 @@ That's it! 🎉
 4. ✅ Container sets up MariaDB + rsyslog + test data
 5. ✅ Container starts the API automatically
 
-**No Go compiler in Docker, no buildx needed!**
 
 ## API Testing
 
@@ -230,8 +229,6 @@ API_KEY=mein-key ./test.sh
 
 | Feature | Docker | Echter Server |
 |---------|--------|---------------|
-| Installation | Automatisch | `make install` |
-| Binary | Auto-gebaut | Von Host kopiert |
 | API Start | Automatisch | systemd |
 | Datenbank | Auto-Setup | Manuell |
 | Testdaten | Inklusive | Keine |

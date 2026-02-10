@@ -22,7 +22,7 @@ High-performance REST API for querying rsyslog data stored in MariaDB/MySQL. Wri
 ### Build
 
 ```bash
-git clone https://github.com/USERNAME/rsyslog-rest-api.git
+git clone https://github.com/phil-bot/rsyslog-rest-api.git
 cd rsyslog-rest-api
 make build
 ```
@@ -221,7 +221,6 @@ curl -H "X-API-Key: test123456789" "http://localhost:8000/logs?limit=5"
 - rsyslog + MariaDB
 - 10 test log entries
 - Automatic setup
-- No buildx required!
 
 See [DOCKER.md](DOCKER.md) for details.
 
