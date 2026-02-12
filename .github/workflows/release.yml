@@ -1,0 +1,207 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Build binaries
+        run: |
+          # Linux amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o build/rsyslog-rest-api-linux-amd64 .
+          
+          # Linux arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o build/rsyslog-rest-api-linux-arm64 .
+          
+          # Make executable
+          chmod +x build/rsyslog-rest-api-*
+      
+      - name: Create offline package
+        run: |
+          # Create package directory
+          mkdir -p package
+          
+          # Copy files
+          cp build/rsyslog-rest-api-linux-amd64 package/rsyslog-rest-api
+          cp .env.example package/
+          cp rsyslog-rest-api.service package/
+          cp LICENSE package/
+          
+          # Create README for package
+          cat > package/README.md << 'EOF'
+          # rsyslog REST API - Offline Package
+          
+          ## Quick Install
+          
+          ```bash
+          # 1. Run install script
+          sudo ./install.sh
+          
+          # 2. Configure
+          sudo nano /opt/rsyslog-rest-api/.env
+          # Set API_KEY (generate: openssl rand -hex 32)
+          
+          # 3. Start
+          sudo systemctl enable --now rsyslog-rest-api
+          sudo systemctl status rsyslog-rest-api
+          
+          # 4. Test
+          curl http://localhost:8000/health
+          ```
+          
+          ## Documentation
+          
+          Full documentation: https://github.com/phil-bot/rsyslog-rest-api
+          EOF
+          
+          # Create install script
+          cat > package/install.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "Installing rsyslog REST API..."
+          
+          # Check if running as root
+          if [ "$EUID" -ne 0 ]; then 
+            echo "Please run with sudo"
+            exit 1
+          fi
+          
+          INSTALL_DIR=/opt/rsyslog-rest-api
+          
+          # Create directory
+          mkdir -p $INSTALL_DIR
+          
+          # Copy binary
+          cp rsyslog-rest-api $INSTALL_DIR/
+          chmod +x $INSTALL_DIR/rsyslog-rest-api
+          
+          # Copy config if not exists
+          if [ ! -f $INSTALL_DIR/.env ]; then
+            cp .env.example $INSTALL_DIR/.env
+            echo "✓ Config file created: $INSTALL_DIR/.env"
+          else
+            echo "✓ Config file already exists (not overwritten)"
+          fi
+          
+          # Copy systemd service
+          cp rsyslog-rest-api.service /etc/systemd/system/
+          systemctl daemon-reload
+          
+          echo ""
+          echo "✓ Installation complete!"
+          echo ""
+          echo "Next steps:"
+          echo "  1. Configure: sudo nano $INSTALL_DIR/.env"
+          echo "  2. Start:     sudo systemctl enable --now rsyslog-rest-api"
+          echo "  3. Status:    sudo systemctl status rsyslog-rest-api"
+          echo "  4. Test:      curl http://localhost:8000/health"
+          echo ""
+          EOF
+          
+          chmod +x package/install.sh
+          
+          # Create tarball
+          tar czf rsyslog-rest-api-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz package/
+          
+          echo "✓ Offline package created"
+      
+      - name: Generate checksums
+        run: |
+          cd build
+          sha256sum rsyslog-rest-api-* > SHA256SUMS
+          cd ..
+          sha256sum rsyslog-rest-api-*.tar.gz >> build/SHA256SUMS
+          cat build/SHA256SUMS
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/rsyslog-rest-api-linux-amd64
+            build/rsyslog-rest-api-linux-arm64
+            rsyslog-rest-api-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz
+            build/SHA256SUMS
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## rsyslog REST API ${{ steps.version.outputs.VERSION }}
+            
+            High-performance REST API for rsyslog/MySQL written in Go.
+            
+            ### 📦 Downloads
+            
+            **Recommended: Offline Package (includes installer)**
+            - `rsyslog-rest-api-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz` - Complete package with install script
+            
+            **Standalone Binaries**
+            - `rsyslog-rest-api-linux-amd64` - Linux x86_64
+            - `rsyslog-rest-api-linux-arm64` - Linux ARM64
+            
+            ### 🚀 Quick Install (Offline Package)
+            
+            ```bash
+            # Download
+            wget https://github.com/phil-bot/rsyslog-rest-api/releases/download/${{ steps.version.outputs.VERSION }}/rsyslog-rest-api-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz
+            
+            # Extract
+            tar xzf rsyslog-rest-api-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz
+            cd package
+            
+            # Install
+            sudo ./install.sh
+            
+            # Configure
+            sudo nano /opt/rsyslog-rest-api/.env
+            
+            # Start
+            sudo systemctl enable --now rsyslog-rest-api
+            ```
+            
+            ### 🔧 Standalone Binary
+            
+            ```bash
+            # Download
+            wget https://github.com/phil-bot/rsyslog-rest-api/releases/download/${{ steps.version.outputs.VERSION }}/rsyslog-rest-api-linux-amd64
+            
+            # Make executable
+            chmod +x rsyslog-rest-api-linux-amd64
+            
+            # Run
+            ./rsyslog-rest-api-linux-amd64
+            ```
+            
+            ### ✅ Verify Checksums
+            
+            ```bash
+            wget https://github.com/phil-bot/rsyslog-rest-api/releases/download/${{ steps.version.outputs.VERSION }}/SHA256SUMS
+            sha256sum -c SHA256SUMS
+            ```
+            
+            ### 📚 Documentation
+            
+            Full documentation: https://github.com/phil-bot/rsyslog-rest-api
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
