@@ -99,6 +99,7 @@ type ErrorResponse struct {
 }
 
 // loadConfiguration loads configuration from environment and rsyslog config
+// loadConfiguration loads configuration from environment and rsyslog config
 func loadConfiguration() (*Configuration, error) {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -121,10 +122,27 @@ func loadConfiguration() (*Configuration, error) {
 	originsStr := getEnv("ALLOWED_ORIGINS", "*")
 	config.AllowedOrigins = strings.Split(originsStr, ",")
 
-	// Read rsyslog configuration
+	// Try to get database config from environment variables first (RECOMMENDED)
+	dbHost := os.Getenv("DB_HOST")
+	dbName := os.Getenv("DB_NAME")
+	dbUser := os.Getenv("DB_USER")
+	dbPass := os.Getenv("DB_PASS")
+
+	// If all DB variables are set, use them directly
+	if dbHost != "" && dbName != "" && dbUser != "" && dbPass != "" {
+		config.DBHost = dbHost
+		config.DBName = dbName
+		config.DBUser = dbUser
+		config.DBPass = dbPass
+		log.Printf("Database connection from environment: %s@%s/%s", dbUser, dbHost, dbName)
+		return config, nil
+	}
+
+	// Fallback: Try to read from rsyslog configuration file
+	log.Println("DB_* environment variables not set, trying rsyslog config file...")
 	dbUser, dbPass, dbName, dbHost, err := readRsyslogConfig(config.RsyslogConfPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load database config: %v\n\nPlease set DB_HOST, DB_NAME, DB_USER, DB_PASS in .env file", err)
 	}
 
 	config.DBUser = dbUser
