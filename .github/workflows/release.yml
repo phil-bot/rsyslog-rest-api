@@ -53,97 +53,97 @@ jobs:
           cp LICENSE package/
           
           # Create README for package
-          cat > package/README.md << 'EOF'
-# rsyslog REST API - Offline Package
-
-## Quick Install
-
-```bash
-# 1. Run install script
-sudo ./install.sh
-
-# 2. Configure database credentials
-sudo nano /opt/rsyslog-rest-api/.env
-# Set: DB_HOST, DB_NAME, DB_USER, DB_PASS
-
-# 3. Set API key
-# Generate: openssl rand -hex 32
-sudo nano /opt/rsyslog-rest-api/.env
-# Set: API_KEY=your-generated-key
-
-# 4. Start
-sudo systemctl enable --now rsyslog-rest-api
-sudo systemctl status rsyslog-rest-api
-
-# 5. Test
-curl http://localhost:8000/health
-```
-
-## Documentation
-
-Full documentation: https://github.com/phil-bot/rsyslog-rest-api
-EOF
+          cat > package/README.md << 'PKGEOF'
+          # rsyslog REST API - Offline Package
+          
+          ## Quick Install
+          
+          ```bash
+          # 1. Run install script
+          sudo ./install.sh
+          
+          # 2. Configure database credentials
+          sudo nano /opt/rsyslog-rest-api/.env
+          # Set: DB_HOST, DB_NAME, DB_USER, DB_PASS
+          
+          # 3. Set API key
+          # Generate: openssl rand -hex 32
+          sudo nano /opt/rsyslog-rest-api/.env
+          # Set: API_KEY=your-generated-key
+          
+          # 4. Start
+          sudo systemctl enable --now rsyslog-rest-api
+          sudo systemctl status rsyslog-rest-api
+          
+          # 5. Test
+          curl http://localhost:8000/health
+          ```
+          
+          ## Documentation
+          
+          Full documentation: https://github.com/phil-bot/rsyslog-rest-api
+          PKGEOF
           
           # Create install script
-          cat > package/install.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "Installing rsyslog REST API..."
-
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-  echo "Please run with sudo"
-  exit 1
-fi
-
-INSTALL_DIR=/opt/rsyslog-rest-api
-
-# Create directory
-mkdir -p $INSTALL_DIR
-
-# Copy binary
-cp rsyslog-rest-api $INSTALL_DIR/
-chmod +x $INSTALL_DIR/rsyslog-rest-api
-
-# Copy config if not exists
-if [ ! -f $INSTALL_DIR/.env ]; then
-  cp .env.example $INSTALL_DIR/.env
-  echo "✓ Config file created: $INSTALL_DIR/.env"
-else
-  echo "✓ Config file already exists (not overwritten)"
-fi
-
-# Copy systemd service
-cp rsyslog-rest-api.service /etc/systemd/system/
-systemctl daemon-reload
-
-echo ""
-echo "✓ Installation complete!"
-echo ""
-echo "IMPORTANT - Configuration required:"
-echo ""
-echo "  1. Set database credentials:"
-echo "     sudo nano $INSTALL_DIR/.env"
-echo "     Set: DB_HOST, DB_NAME, DB_USER, DB_PASS"
-echo ""
-echo "  2. Set API key (generate: openssl rand -hex 32):"
-echo "     sudo nano $INSTALL_DIR/.env"
-echo "     Set: API_KEY=your-generated-key"
-echo ""
-echo "  3. Secure config file:"
-echo "     sudo chmod 600 $INSTALL_DIR/.env"
-echo ""
-echo "  4. Start service:"
-echo "     sudo systemctl enable --now rsyslog-rest-api"
-echo ""
-echo "  5. Check status:"
-echo "     sudo systemctl status rsyslog-rest-api"
-echo ""
-echo "  6. Test API:"
-echo "     curl http://localhost:8000/health"
-echo ""
-EOF
+          cat > package/install.sh << 'INSTEOF'
+          #!/bin/bash
+          set -e
+          
+          echo "Installing rsyslog REST API..."
+          
+          # Check if running as root
+          if [ "$EUID" -ne 0 ]; then 
+            echo "Please run with sudo"
+            exit 1
+          fi
+          
+          INSTALL_DIR=/opt/rsyslog-rest-api
+          
+          # Create directory
+          mkdir -p $INSTALL_DIR
+          
+          # Copy binary
+          cp rsyslog-rest-api $INSTALL_DIR/
+          chmod +x $INSTALL_DIR/rsyslog-rest-api
+          
+          # Copy config if not exists
+          if [ ! -f $INSTALL_DIR/.env ]; then
+            cp .env.example $INSTALL_DIR/.env
+            echo "✓ Config file created: $INSTALL_DIR/.env"
+          else
+            echo "✓ Config file already exists (not overwritten)"
+          fi
+          
+          # Copy systemd service
+          cp rsyslog-rest-api.service /etc/systemd/system/
+          systemctl daemon-reload
+          
+          echo ""
+          echo "✓ Installation complete!"
+          echo ""
+          echo "IMPORTANT - Configuration required:"
+          echo ""
+          echo "  1. Set database credentials:"
+          echo "     sudo nano $INSTALL_DIR/.env"
+          echo "     Set: DB_HOST, DB_NAME, DB_USER, DB_PASS"
+          echo ""
+          echo "  2. Set API key (generate: openssl rand -hex 32):"
+          echo "     sudo nano $INSTALL_DIR/.env"
+          echo "     Set: API_KEY=your-generated-key"
+          echo ""
+          echo "  3. Secure config file:"
+          echo "     sudo chmod 600 $INSTALL_DIR/.env"
+          echo ""
+          echo "  4. Start service:"
+          echo "     sudo systemctl enable --now rsyslog-rest-api"
+          echo ""
+          echo "  5. Check status:"
+          echo "     sudo systemctl status rsyslog-rest-api"
+          echo ""
+          echo "  6. Test API:"
+          echo "     curl http://localhost:8000/health"
+          echo ""
+          INSTEOF
           
           chmod +x package/install.sh
           
