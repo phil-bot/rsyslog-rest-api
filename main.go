@@ -16,6 +16,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+// Version is set at build time via ldflags
+var Version = "dev"
+
 // Configuration holds all app configuration
 type Configuration struct {
 	DBUser          string
@@ -99,7 +102,6 @@ type ErrorResponse struct {
 }
 
 // loadConfiguration loads configuration from environment and rsyslog config
-// loadConfiguration loads configuration from environment and rsyslog config
 func loadConfiguration() (*Configuration, error) {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -140,15 +142,16 @@ func loadConfiguration() (*Configuration, error) {
 
 	// Fallback: Try to read from rsyslog configuration file
 	log.Println("DB_* environment variables not set, trying rsyslog config file...")
-	dbUser, dbPass, dbName, dbHost, err := readRsyslogConfig(config.RsyslogConfPath)
+	var dbUserConf, dbPassConf, dbNameConf, dbHostConf string
+	dbUserConf, dbPassConf, dbNameConf, dbHostConf, err = readRsyslogConfig(config.RsyslogConfPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load database config: %v\n\nPlease set DB_HOST, DB_NAME, DB_USER, DB_PASS in .env file", err)
 	}
 
-	config.DBUser = dbUser
-	config.DBPass = dbPass
-	config.DBName = dbName
-	config.DBHost = dbHost
+	config.DBUser = dbUserConf
+	config.DBPass = dbPassConf
+	config.DBName = dbNameConf
+	config.DBHost = dbHostConf
 
 	return config, nil
 }
@@ -357,7 +360,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	// Otherwise show API info
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"name":    "rsyslog REST API",
-		"version": "0.2.1",
+		"version": Version,
 		"endpoints": map[string]string{
 			"logs":   "/logs?limit=10&Priority=3",
 			"meta":   "/meta or /meta/{column}",
@@ -371,7 +374,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	// Test database connection
 	dbStatus := "connected"
 	if err := db.Ping(); err != nil {
-		dbStatus := "disconnected"
+		dbStatus = "disconnected"
 		respondJSON(w, http.StatusServiceUnavailable, HealthResponse{
 			Status:    "unhealthy",
 			Database:  dbStatus,
@@ -721,6 +724,7 @@ func main() {
 		log.Println("WARNING: Running without API key authentication! Set API_KEY environment variable for production.")
 	}
 	log.Printf("CORS allowed origins: %v", config.AllowedOrigins)
+	log.Printf("Version: %s", Version)
 
 	// Setup routes
 	http.HandleFunc("/", corsMiddleware(loggingMiddleware(handleRoot)))
