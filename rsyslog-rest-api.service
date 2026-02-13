@@ -1,12 +1,12 @@
 [Unit]
 Description=rsyslog REST API
 After=network.target mysql.service mariadb.service
-Wants=mysql.service
+Wants=mysql.service mariadb.service
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=root
+Group=root
 WorkingDirectory=/opt/rsyslog-rest-api
 EnvironmentFile=/opt/rsyslog-rest-api/.env
 ExecStart=/opt/rsyslog-rest-api/rsyslog-rest-api
@@ -19,16 +19,6 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/rsyslog-rest-api
-ReadOnlyPaths=/etc/rsyslog.d/mysql.conf
-
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=rsyslog-rest-api
-
-# Resource Limits
-LimitNOFILE=65536
-MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target
