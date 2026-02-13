@@ -357,7 +357,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	// Otherwise show API info
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"name":    "rsyslog REST API",
-		"version": "0.2.0",
+		"version": "0.2.1",
 		"endpoints": map[string]string{
 			"logs":   "/logs?limit=10&Priority=3",
 			"meta":   "/meta or /meta/{column}",
