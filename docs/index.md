@@ -1,97 +1,97 @@
-# rsyslog REST API - Dokumentation
+# rsyslog REST API - Documentation
 
-Willkommen zur vollständigen Dokumentation des rsyslog REST API Projekts.
+Welcome to the complete documentation of the rsyslog REST API project.
 
-## 📖 Übersicht
+## 📖 Overview
 
-Diese Dokumentation ist in verschiedene Bereiche unterteilt, je nach Ihrer Rolle und Ihren Anforderungen.
+This documentation is divided into different sections depending on your role and requirements.
 
-## 🚀 Für Endnutzer
+## 🚀 For End Users
 
-### Erste Schritte
+### Getting Started
 
-| Dokument | Beschreibung |
-|----------|--------------|
-| [**Installation**](installation.md) | Alle Installationsmethoden (Binary, Source, Package) |
-| [**Configuration**](configuration.md) | Vollständige Konfigurationsreferenz |
-| [**Quick Examples**](examples.md) | Praktische Beispiele für häufige Anwendungsfälle |
+| Document | Description |
+|----------|-------------|
+| [**Installation**](installation.md) | All installation methods (Binary, Source, Package) |
+| [**Configuration**](configuration.md) | Complete configuration reference |
+| [**Quick Examples**](examples.md) | Practical examples for common use cases |
 
-### Nutzung & API
+### Usage & API
 
-| Dokument | Beschreibung |
-|----------|--------------|
-| [**API Reference**](api-reference.md) | Vollständige API-Dokumentation mit allen Endpunkten |
-| [**Troubleshooting**](troubleshooting.md) | Häufige Probleme, Lösungen und FAQ |
-| [**Changelog**](changelog.md) | Versionshistorie und Breaking Changes |
+| Document | Description |
+|----------|-------------|
+| [**API Reference**](api-reference.md) | Complete API documentation with all endpoints |
+| [**Troubleshooting**](troubleshooting.md) | Common issues, solutions, and FAQ |
+| [**Changelog**](changelog.md) | Version history and breaking changes |
 
-## 🔧 Für Administratoren
+## 🔧 For Administrators
 
-| Dokument | Beschreibung |
-|----------|--------------|
-| [**Deployment**](deployment.md) | Production Setup, Systemd, Reverse Proxy |
-| [**Security**](security.md) | Best Practices für sicheren Betrieb |
-| [**Performance**](performance.md) | Optimierung und Benchmarks |
+| Document | Description |
+|----------|-------------|
+| [**Deployment**](deployment.md) | Production setup, systemd, reverse proxy |
+| [**Security**](security.md) | Best practices for secure operation |
+| [**Performance**](performance.md) | Optimization and benchmarks |
 
-## 💻 Für Entwickler
+## 💻 For Developers
 
-| Dokument | Beschreibung |
-|----------|--------------|
-| [**Docker Testing**](docker.md) | Testumgebung mit Live-Daten |
-| [**Development**](development.md) | Architektur, Build, Contributing |
+| Document | Description |
+|----------|-------------|
+| [**Docker Testing**](docker.md) | Test environment with live data |
+| [**Development**](development.md) | Architecture, build, contributing |
 
-## 🔍 Schnellzugriff
+## 🔍 Quick Access
 
-### Häufige Aufgaben
+### Common Tasks
 
-- **Installation starten:** → [Installation Guide](installation.md#quick-install)
-- **API-Key generieren:** → [Configuration](configuration.md#api-key)
-- **SSL einrichten:** → [Security](security.md#ssltls)
-- **Produktiv deployen:** → [Deployment](deployment.md#production-setup)
-- **Fehlersuche:** → [Troubleshooting](troubleshooting.md)
-- **Docker testen:** → [Docker Guide](docker.md#quick-start)
+- **Start installation:** → [Installation Guide](installation.md#quick-install)
+- **Generate API key:** → [Configuration](configuration.md#api-key)
+- **Setup SSL:** → [Security](security.md#ssltls)
+- **Deploy to production:** → [Deployment](deployment.md#production-setup)
+- **Troubleshoot:** → [Troubleshooting](troubleshooting.md)
+- **Test with Docker:** → [Docker Guide](docker.md#quick-start)
 
-### API-Endpunkte
+### API Endpoints
 
-- **Health Check:** → [GET /health](api-reference.md#get-health)
-- **Logs abrufen:** → [GET /logs](api-reference.md#get-logs)
-- **Metadaten:** → [GET /meta](api-reference.md#get-meta)
+- **Health check:** → [GET /health](api-reference.md#get-health)
+- **Retrieve logs:** → [GET /logs](api-reference.md#get-logs)
+- **Metadata:** → [GET /meta](api-reference.md#get-meta)
 
-## 📚 Dokumentationsstruktur
+## 📚 Documentation Structure
 
 ```
 docs/
-├── index.md                 # Diese Datei - Übersicht
+├── index.md                 # This file - Overview
 │
 ├── installation.md          # Installation (Binary, Source, Package)
-├── configuration.md         # Vollständige Konfiguration
-├── api-reference.md         # API-Endpunkte und Parameter
-├── examples.md              # Praktische Beispiele
-├── troubleshooting.md       # Fehlersuche und FAQ
+├── configuration.md         # Complete configuration
+├── api-reference.md         # API endpoints and parameters
+├── examples.md              # Practical examples
+├── troubleshooting.md       # Troubleshooting and FAQ
 │
-├── deployment.md            # Production Deployment
-├── security.md              # Sicherheits-Best-Practices
-├── performance.md           # Performance-Tuning
+├── deployment.md            # Production deployment
+├── security.md              # Security best practices
+├── performance.md           # Performance tuning
 │
-├── docker.md                # Docker Testumgebung
-├── development.md           # Entwicklung und Contributing
+├── docker.md                # Docker test environment
+├── development.md           # Development and contributing
 │
-└── changelog.md             # Versionshistorie
+└── changelog.md             # Version history
 ```
 
-## 🆘 Hilfe benötigt?
+## 🆘 Need Help?
 
-- **GitHub Issues:** [Fehler melden](https://github.com/phil-bot/rsyslog-rest-api/issues)
-- **GitHub Discussions:** [Fragen stellen](https://github.com/phil-bot/rsyslog-rest-api/discussions)
-- **Troubleshooting:** [FAQ durchsuchen](troubleshooting.md#faq)
+- **GitHub Issues:** [Report bugs](https://github.com/phil-bot/rsyslog-rest-api/issues)
+- **GitHub Discussions:** [Ask questions](https://github.com/phil-bot/rsyslog-rest-api/discussions)
+- **Troubleshooting:** [Browse FAQ](troubleshooting.md#faq)
 
-## 🔄 Versionen
+## 🔄 Versions
 
-Diese Dokumentation gilt für:
-- **Aktuelle Version:** v0.2.2
-- **Mindest-Version:** v0.2.0
+This documentation is for:
+- **Current version:** v0.2.2
+- **Minimum version:** v0.2.0
 
-Für ältere Versionen siehe [Changelog](changelog.md).
+For older versions see [Changelog](changelog.md).
 
 ---
 
-[← Zurück zur README](../README.md)
+[← Back to README](../README.md)

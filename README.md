@@ -6,33 +6,33 @@
 
 High-performance REST API for rsyslog/MySQL written in Go.
 
-## 📖 Über das Projekt
+## 📖 About
 
-Ein moderner REST API Server, der rsyslog-Daten aus einer MySQL/MariaDB-Datenbank abfragt und über HTTP/JSON zugänglich macht. Perfekt für Monitoring-Dashboards, Log-Analysen und System-Integration.
+A modern REST API server that queries rsyslog data from a MySQL/MariaDB database and makes it accessible via HTTP/JSON. Perfect for monitoring dashboards, log analysis, and system integration.
 
 ### 🌟 Features
 
-- 🚀 **High Performance** - In Go kompiliert für maximale Geschwindigkeit
-- 🔍 **Erweiterte Filter** - Multi-Value-Filter für komplexe Abfragen
-- 📊 **Alle Felder** - Zugriff auf alle 25+ SystemEvents-Spalten
-- 🔐 **Sicher** - API-Key-Authentifizierung, SSL/TLS-Support
-- 🐳 **Docker Ready** - Komplette Testumgebung mit Live-Daten
-- 📝 **REST API** - Saubere JSON-Antworten
-- 🎯 **RFC-5424** - Korrekte Syslog-Severity und Facility-Labels
+- 🚀 **High Performance** - Compiled in Go for maximum speed
+- 🔍 **Advanced Filtering** - Multi-value filters for complex queries
+- 📊 **All Fields** - Access to all 25+ SystemEvents columns
+- 🔐 **Secure** - API key authentication, SSL/TLS support
+- 🐳 **Docker Ready** - Complete test environment with live data
+- 📝 **REST API** - Clean JSON responses
+- 🎯 **RFC-5424 Compliant** - Proper syslog severity and facility labels
 
 ## 🚀 Quick Start
 
-### Binary Installation (empfohlen)
+### Binary Installation (Recommended)
 
 ```bash
 # Download latest release
 wget https://github.com/phil-bot/rsyslog-rest-api/releases/latest/download/rsyslog-rest-api-linux-amd64
 
-# Installieren
+# Install
 chmod +x rsyslog-rest-api-linux-amd64
 sudo mv rsyslog-rest-api-linux-amd64 /usr/local/bin/rsyslog-rest-api
 
-# Konfiguration erstellen
+# Create configuration
 cat > .env << EOF
 API_KEY=$(openssl rand -hex 32)
 DB_HOST=localhost
@@ -41,19 +41,19 @@ DB_USER=rsyslog
 DB_PASS=your-password
 EOF
 
-# Starten
+# Run
 rsyslog-rest-api
 ```
 
-**API testen:**
+**Test the API:**
 ```bash
 curl http://localhost:8000/health
 curl -H "X-API-Key: YOUR_KEY" "http://localhost:8000/logs?limit=5"
 ```
 
-### Docker Testumgebung
+### Docker Test Environment
 
-Perfekt zum Testen mit live generierten Logs:
+Perfect for testing with live generated logs:
 
 ```bash
 # Build binary
@@ -66,82 +66,82 @@ cd docker && docker-compose up -d
 curl "http://localhost:8000/logs?limit=5"
 ```
 
-→ [Ausführliche Installation](docs/installation.md)
+→ [Full Installation Guide](docs/installation.md)
 
-## 📚 Dokumentation
+## 📚 Documentation
 
-### Erste Schritte
-- [**Installation Guide**](docs/installation.md) - Alle Installationsmethoden
-- [**Configuration**](docs/configuration.md) - Vollständige Konfiguration
-- [**Quick Examples**](docs/examples.md) - Praktische Beispiele
+### Getting Started
+- [**Installation Guide**](docs/installation.md) - All installation methods
+- [**Configuration**](docs/configuration.md) - Complete configuration
+- [**Quick Examples**](docs/examples.md) - Practical examples
 
-### API & Nutzung
-- [**API Reference**](docs/api-reference.md) - Alle Endpunkte und Parameter
-- [**Troubleshooting**](docs/troubleshooting.md) - Fehlersuche und FAQ
+### API & Usage
+- [**API Reference**](docs/api-reference.md) - All endpoints and parameters
+- [**Troubleshooting**](docs/troubleshooting.md) - Troubleshooting and FAQ
 
 ### Administration
-- [**Deployment**](docs/deployment.md) - Production Setup
-- [**Security**](docs/security.md) - Sicherheits-Best-Practices
+- [**Deployment**](docs/deployment.md) - Production setup
+- [**Security**](docs/security.md) - Security best practices
 
-### Entwicklung
-- [**Docker Testing**](docs/docker.md) - Testumgebung
-- [**Development**](docs/development.md) - Architektur und Contributing
+### Development
+- [**Docker Testing**](docs/docker.md) - Test environment
+- [**Development**](docs/development.md) - Architecture and contributing
 
-→ [**Vollständige Dokumentation**](docs/index.md)
+→ [**Full Documentation**](docs/index.md)
 
-## 💡 Beispiele
+## 💡 Examples
 
-### Logs mit Filtern abrufen
+### Retrieve logs with filters
 
 ```bash
-# Alle Errors der letzten Stunde
+# All errors from the last hour
 curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/logs?Priority=3&start_date=2025-02-09T09:00:00Z"
 
-# Logs von mehreren Hosts (Multi-Value!)
+# Logs from multiple hosts (Multi-value!)
 curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/logs?FromHost=web01&FromHost=web02&FromHost=db01"
 
-# Kombinierte Filter
+# Combined filters
 curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/logs?FromHost=web01&Priority=3&Priority=4&limit=20"
 ```
 
-### Metadaten abfragen
+### Query metadata
 
 ```bash
-# Alle verfügbaren Hosts
+# All available hosts
 curl -H "X-API-Key: YOUR_KEY" "http://localhost:8000/meta/FromHost"
 
-# Alle Priorities mit Labels
+# All priorities with labels
 curl -H "X-API-Key: YOUR_KEY" "http://localhost:8000/meta/Priority"
 
-# Hosts die Errors hatten
+# Hosts that had errors
 curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/meta/FromHost?Priority=3&Priority=4"
 ```
 
-→ [Weitere Beispiele](docs/examples.md)
+→ [More Examples](docs/examples.md)
 
-## 🆕 Was ist neu in v0.2.2?
+## 🆕 What's New in v0.2.2?
 
-- ✅ **Multi-Value-Filter** - Mehrere Werte pro Parameter
-- ✅ **Erweiterte Spalten** - Alle 25+ SystemEvents-Felder
-- ✅ **Live Log Generator** - Realistische Test-Logs (Docker)
-- ✅ **Meta-Endpoint** - Filtert nun auch mit Multi-Value
+- ✅ **Multi-Value Filters** - Multiple values per parameter
+- ✅ **Extended Columns** - All 25+ SystemEvents fields
+- ✅ **Live Log Generator** - Realistic test logs (Docker)
+- ✅ **Meta Endpoint** - Now also filters with multi-value
 
 → [Changelog](docs/changelog.md)
 
 ## 🗺️ Roadmap
 
-### v0.3.0 (Geplant)
+### v0.3.0 (Planned)
 - Negation filters (`exclude`, `not`)
-- Erweiterte Filter-Kombinationen
-- Complex Query Support
+- Advanced filter combinations
+- Complex query support
 
-### v0.4.0 (Geplant)
-- Statistics Endpoint (`/stats`)
-- Aggregationen
+### v0.4.0 (Planned)
+- Statistics endpoint (`/stats`)
+- Aggregations
 - Timeline/Histogram
 
 → [GitHub Issues](https://github.com/phil-bot/rsyslog-rest-api/issues)
@@ -154,7 +154,7 @@ curl -H "X-API-Key: YOUR_KEY" \
 
 ## 🙏 Contributing
 
-Beiträge sind willkommen! Bitte lies [Contributing Guidelines](docs/development.md#contributing).
+Contributions are welcome! Please read the [Contributing Guidelines](docs/development.md#contributing).
 
 1. Fork the repository
 2. Create feature branch
@@ -163,11 +163,11 @@ Beiträge sind willkommen! Bitte lies [Contributing Guidelines](docs/development
 
 ## 📄 License
 
-MIT License - siehe [LICENSE](LICENSE) für Details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## ✨ Credits
 
-Erstellt mit ❤️ für die Syslog-Community.
+Created with ❤️ for the syslog community.
 
 **Built with:**
 - [Go](https://go.dev/)
@@ -177,4 +177,4 @@ Erstellt mit ❤️ für die Syslog-Community.
 
 ---
 
-⭐ **Star dieses Projekt** wenn es dir hilft!
+⭐ **Star this project** if it helps you!
