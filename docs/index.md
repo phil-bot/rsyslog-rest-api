@@ -1,4 +1,12 @@
-# rsyslog REST API - Documentation
+# rsyslog REST API
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/phil-bot/rsyslog-rest-api)](https://github.com/phil-bot/rsyslog-rest-api/releases)
+
+High-performance REST API for rsyslog/MySQL written in Go. It queries rsyslog data from a MySQL/MariaDB database and makes it accessible via HTTP/JSON. Perfect for monitoring dashboards, log analysis, and system integration.
+
+# Documentation
 
 Welcome to the complete documentation of the rsyslog REST API project.
 
@@ -19,15 +27,13 @@ This documentation is divided into different sections depending on your role and
 | Document | Description |
 |----------|-------------|
 | [**API Reference**](api-reference.md) | Complete API documentation with all endpoints |
-| [**Troubleshooting**](troubleshooting.md) | Common issues, solutions, and FAQ |
-| [**Changelog**](changelog.md) | Version history and breaking changes |
-
-| Document | Description |
-|----------|-------------|
 | [**Deployment**](deployment.md) | Production setup, systemd, reverse proxy |
 | [**Security**](security.md) | Best practices for secure operation |
 | [**Performance**](performance.md) | Optimization and benchmarks |
+| [**Troubleshooting**](troubleshooting.md) | Common issues, solutions, and FAQ |
+| [**Changelog**](changelog.md) | Version history and breaking changes |
 
+### Test environment
 
 | Document | Description |
 |----------|-------------|
