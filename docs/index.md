@@ -6,6 +6,8 @@
 
 High-performance REST API for rsyslog/MySQL written in Go. It queries rsyslog data from a MySQL/MariaDB database and makes it accessible via HTTP/JSON. Perfect for monitoring dashboards, log analysis, and system integration.
 
+ → **[Main Repository](https://github.com/phil-bot/rsyslog-rest-api)**
+
 # Documentation
 
 Welcome to the complete documentation of the rsyslog REST API project.
@@ -81,10 +83,8 @@ docs/
 
 ## 🆘 Need Help?
 
+- **GitHub Repository** [Main Repository](https://github.com/phil-bot/rsyslog-rest-api)
 - **GitHub Issues:** [Report bugs](https://github.com/phil-bot/rsyslog-rest-api/issues)
 - **GitHub Discussions:** [Ask questions](https://github.com/phil-bot/rsyslog-rest-api/discussions)
 - **Troubleshooting:** [Browse FAQ](troubleshooting.md#faq)
 
----
-
-[← Back to README](../README.md)
