@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/models"
+	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // respondJSON sends a JSON response with proper headers

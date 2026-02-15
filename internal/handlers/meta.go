@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/database"
-	"github.com/phil-bot/rsyslog-rest-api/internal/filters"
-	"github.com/phil-bot/rsyslog-rest-api/internal/models"
+	"github.com/phil-bot/rsyslox/internal/database"
+	"github.com/phil-bot/rsyslox/internal/filters"
+	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // MetaHandler handles metadata requests

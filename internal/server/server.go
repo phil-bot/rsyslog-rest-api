@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/config"
-	"github.com/phil-bot/rsyslog-rest-api/internal/database"
-	"github.com/phil-bot/rsyslog-rest-api/internal/handlers"
-	"github.com/phil-bot/rsyslog-rest-api/internal/middleware"
+	"github.com/phil-bot/rsyslox/internal/config"
+	"github.com/phil-bot/rsyslox/internal/database"
+	"github.com/phil-bot/rsyslox/internal/handlers"
+	"github.com/phil-bot/rsyslox/internal/middleware"
 )
 
 // Server represents the HTTP server

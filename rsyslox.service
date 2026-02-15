@@ -1,0 +1,24 @@
+[Unit]
+Description=rsyslox - rsyslog REST API
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/rsyslox
+EnvironmentFile=/opt/rsyslox/.env
+ExecStart=/opt/rsyslox/rsyslox
+Restart=on-failure
+RestartSec=5s
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rsyslox
+
+[Install]
+WantedBy=multi-user.target

@@ -13,6 +13,7 @@ type responseWriter struct {
 	written    bool
 }
 
+// WriteHeader captures the status code
 func (rw *responseWriter) WriteHeader(code int) {
 	if !rw.written {
 		rw.statusCode = code
@@ -21,6 +22,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 	}
 }
 
+// Write ensures WriteHeader is called
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	if !rw.written {
 		rw.WriteHeader(http.StatusOK)
@@ -28,30 +30,28 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	return rw.ResponseWriter.Write(b)
 }
 
-// Logging returns a middleware that logs HTTP requests with improved formatting
+// Logging returns a middleware that logs HTTP requests
 func Logging() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 
-			// Wrap response writer to capture status code
-			rw := &responseWriter{
+			// Wrap response writer
+			wrapped := &responseWriter{
 				ResponseWriter: w,
 				statusCode:     http.StatusOK,
 			}
 
-			// Process request
-			next.ServeHTTP(rw, r)
+			// Call next handler
+			next.ServeHTTP(wrapped, r)
 
-			// Log request with improved formatting
+			// Log request
 			duration := time.Since(start)
-			log.Printf("[%s] %s %s - %d - %v - %s",
-				start.Format("2006-01-02 15:04:05"),
+			log.Printf("%s %s %d %v",
 				r.Method,
 				r.URL.Path,
-				rw.statusCode,
+				wrapped.statusCode,
 				duration,
-				r.RemoteAddr,
 			)
 		})
 	}

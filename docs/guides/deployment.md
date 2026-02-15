@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Production deployment guide for rsyslog REST API.
+Production deployment guide for rsyslox.
 
 ## Production Checklist
 
@@ -20,25 +20,25 @@ Before deploying:
 
 ```bash
 # Copy service file
-sudo cp rsyslog-rest-api.service /etc/systemd/system/
+sudo cp rsyslox.service /etc/systemd/system/
 
 # Reload systemd
 sudo systemctl daemon-reload
 
 # Enable and start
-sudo systemctl enable --now rsyslog-rest-api
+sudo systemctl enable --now rsyslox
 
 # Check status
-sudo systemctl status rsyslog-rest-api
+sudo systemctl status rsyslox
 ```
 
 ### Service File
 
-`/etc/systemd/system/rsyslog-rest-api.service`:
+`/etc/systemd/system/rsyslox.service`:
 
 ```ini
 [Unit]
-Description=rsyslog REST API
+Description=rsyslox - rsyslog REST API
 After=network.target mysql.service
 Wants=mysql.service
 
@@ -46,9 +46,9 @@ Wants=mysql.service
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/opt/rsyslog-rest-api
-EnvironmentFile=/opt/rsyslog-rest-api/.env
-ExecStart=/opt/rsyslog-rest-api/rsyslog-rest-api
+WorkingDirectory=/opt/rsyslox
+EnvironmentFile=/opt/rsyslox/.env
+ExecStart=/opt/rsyslox/rsyslox
 Restart=on-failure
 RestartSec=5s
 
@@ -57,7 +57,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/rsyslog-rest-api
+ReadWritePaths=/opt/rsyslox
 
 [Install]
 WantedBy=multi-user.target
@@ -68,9 +68,9 @@ WantedBy=multi-user.target
 ### nginx (Recommended)
 
 ```nginx
-# /etc/nginx/sites-available/rsyslog-api
+# /etc/nginx/sites-available/rsyslox
 
-upstream rsyslog_api {
+upstream rsyslox_api {
     server 127.0.0.1:8000;
 }
 
@@ -93,14 +93,14 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
 
     # Logging
-    access_log /var/log/nginx/rsyslog-api-access.log;
-    error_log /var/log/nginx/rsyslog-api-error.log;
+    access_log /var/log/nginx/rsyslox-access.log;
+    error_log /var/log/nginx/rsyslox-error.log;
 
     location / {
         # Rate limiting
         limit_req zone=api_limit burst=20 nodelay;
 
-        proxy_pass http://rsyslog_api;
+        proxy_pass http://rsyslox_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -108,13 +108,13 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
 
         # Timeouts
-        proxy_connect_timeout 10s;
-        proxy_send_timeout 30s;
-        proxy_read_timeout 30s;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
     }
 }
 
-# HTTP redirect
+# HTTP to HTTPS redirect
 server {
     listen 80;
     server_name api.example.com;
@@ -122,228 +122,286 @@ server {
 }
 ```
 
-Enable site:
+Enable the site:
 ```bash
-sudo ln -s /etc/nginx/sites-available/rsyslog-api /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/rsyslox /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### SSL with Let's Encrypt
+### Apache
 
+```apache
+# /etc/apache2/sites-available/rsyslox.conf
+
+<VirtualHost *:443>
+    ServerName api.example.com
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/api.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/api.example.com/privkey.pem
+
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:8000/
+    ProxyPassReverse / http://127.0.0.1:8000/
+
+    # Security Headers
+    Header always set Strict-Transport-Security "max-age=31536000"
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+
+    ErrorLog ${APACHE_LOG_DIR}/rsyslox-error.log
+    CustomLog ${APACHE_LOG_DIR}/rsyslox-access.log combined
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName api.example.com
+    Redirect permanent / https://api.example.com/
+</VirtualHost>
+```
+
+Enable modules and site:
 ```bash
-# Install certbot
-sudo apt-get install certbot python3-certbot-nginx
-
-# Get certificate
-sudo certbot --nginx -d api.example.com
-
-# Auto-renewal (already configured)
-sudo systemctl status certbot.timer
+sudo a2enmod proxy proxy_http ssl headers
+sudo a2ensite rsyslox
+sudo apache2ctl configtest
+sudo systemctl reload apache2
 ```
 
 ## Firewall Configuration
 
-### ufw (Ubuntu/Debian)
+### UFW (Ubuntu/Debian)
 
 ```bash
-# Allow API port (if direct access)
-sudo ufw allow 8000/tcp
-
-# Or only allow nginx
-sudo ufw allow 'Nginx Full'
-
 # Allow SSH
-sudo ufw allow 22/tcp
+sudo ufw allow ssh
 
-# Enable
+# Allow HTTP/HTTPS
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Enable firewall
 sudo ufw enable
+sudo ufw status
 ```
 
 ### firewalld (CentOS/RHEL)
 
 ```bash
-# Allow HTTPS
+# Allow HTTP/HTTPS
+sudo firewall-cmd --permanent --add-service=http
 sudo firewall-cmd --permanent --add-service=https
 
 # Reload
 sudo firewall-cmd --reload
+sudo firewall-cmd --list-all
+```
+
+## SSL/TLS Setup
+
+### Let's Encrypt (Certbot)
+
+```bash
+# Install certbot
+sudo apt-get install certbot python3-certbot-nginx  # Ubuntu/Debian
+sudo yum install certbot python3-certbot-nginx      # CentOS/RHEL
+
+# Obtain certificate
+sudo certbot --nginx -d api.example.com
+
+# Test auto-renewal
+sudo certbot renew --dry-run
 ```
 
 ## Monitoring
 
-### Health Check
+### systemd Journal
 
 ```bash
-# Simple check
-curl https://api.example.com/health
+# View logs
+sudo journalctl -u rsyslox -n 50
 
-# Monitoring script
+# Follow logs
+sudo journalctl -u rsyslox -f
+
+# Logs since boot
+sudo journalctl -u rsyslox -b
+```
+
+### Health Check Script
+
+```bash
 #!/bin/bash
-if ! curl -sf https://api.example.com/health > /dev/null; then
-    echo "API is down!" | mail -s "API Alert" admin@example.com
+# /usr/local/bin/rsyslox-healthcheck.sh
+
+API_URL="http://localhost:8000"
+ALERT_EMAIL="admin@example.com"
+
+if ! curl -sf "$API_URL/health" > /dev/null; then
+    echo "rsyslox health check failed!" | mail -s "API Alert" $ALERT_EMAIL
+    systemctl restart rsyslox
 fi
 ```
 
-### Logs
-
+Add to crontab:
 ```bash
-# API logs
-sudo journalctl -u rsyslog-rest-api -f
-
-# nginx logs
-sudo tail -f /var/log/nginx/rsyslog-api-access.log
-sudo tail -f /var/log/nginx/rsyslog-api-error.log
+# Check every 5 minutes
+*/5 * * * * /usr/local/bin/rsyslox-healthcheck.sh
 ```
 
-### Performance Metrics
-
-```bash
-# Query performance
-time curl -H "X-API-Key: $KEY" "https://api.example.com/logs?limit=1000"
-
-# Database connections
-mysql -e "SHOW STATUS LIKE 'Threads_connected'"
-
-# System resources
-htop
-iostat -x 1
-```
-
-## Backup & Recovery
-
-### Database Backup
-
-```bash
-# Backup SystemEvents table
-mysqldump -u rsyslog -p Syslog SystemEvents > backup_$(date +%Y%m%d).sql
-
-# Automated daily backup
-cat > /etc/cron.daily/backup-syslog << 'BACKUP'
-#!/bin/bash
-mysqldump -u rsyslog -p"password" Syslog SystemEvents | \
-  gzip > /backup/syslog_$(date +%Y%m%d).sql.gz
-find /backup -name "syslog_*.sql.gz" -mtime +30 -delete
-BACKUP
-
-chmod +x /etc/cron.daily/backup-syslog
-```
+## Backup Strategy
 
 ### Configuration Backup
 
 ```bash
-# Backup API config
-sudo cp /opt/rsyslog-rest-api/.env /backup/api-env-$(date +%Y%m%d)
-```
+#!/bin/bash
+# /usr/local/bin/backup-rsyslox-config.sh
 
-## Scaling
+BACKUP_DIR="/backup/rsyslox"
+DATE=$(date +%Y%m%d_%H%M%S)
 
-### Vertical Scaling
+mkdir -p "$BACKUP_DIR"
 
-```go
-// In main.go - increase connection pool
-db.SetMaxOpenConns(50)   // Default: 25
-db.SetMaxIdleConns(10)   // Default: 5
-```
+# Backup configuration
+cp /opt/rsyslox/.env "$BACKUP_DIR/env_$DATE"
+cp /etc/systemd/system/rsyslox.service "$BACKUP_DIR/service_$DATE"
 
-### Horizontal Scaling
-
-```
-┌─────────┐
-│ nginx   │ Load Balancer
-│ (LB)    │
-└────┬────┘
-     │
-     ├──────────┬──────────┐
-     │          │          │
-┌────▼───┐ ┌────▼───┐ ┌────▼───┐
-│ API 1  │ │ API 2  │ │ API 3  │
-└────┬───┘ └────┬───┘ └────┬───┘
-     │          │          │
-     └──────────┴──────────┘
-            │
-       ┌────▼─────┐
-       │ MySQL    │
-       │ (Master) │
-       └──────────┘
-```
-
-nginx config for load balancing:
-
-```nginx
-upstream rsyslog_api_cluster {
-    least_conn;
-    server 10.0.1.10:8000;
-    server 10.0.1.11:8000;
-    server 10.0.1.12:8000;
-}
-```
-
-## Maintenance
-
-### Update API
-
-```bash
-# Download new version
-wget https://github.com/.../rsyslog-rest-api-linux-amd64
-
-# Stop service
-sudo systemctl stop rsyslog-rest-api
-
-# Backup old binary
-sudo cp /opt/rsyslog-rest-api/rsyslog-rest-api \
-       /opt/rsyslog-rest-api/rsyslog-rest-api.backup
-
-# Replace binary
-sudo mv rsyslog-rest-api-linux-amd64 /opt/rsyslog-rest-api/rsyslog-rest-api
-sudo chmod +x /opt/rsyslog-rest-api/rsyslog-rest-api
-
-# Start service
-sudo systemctl start rsyslog-rest-api
-
-# Verify
-curl https://api.example.com/health
-```
-
-### Log Rotation
-
-```bash
-# /etc/logrotate.d/rsyslog-api
-/var/log/rsyslog-rest-api.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    notifempty
-    create 0640 root root
-    postrotate
-        systemctl reload rsyslog-rest-api > /dev/null 2>&1 || true
-    endscript
-}
-```
-
-## Testing Production Setup
-
-```bash
-# 1. Health check
-curl https://api.example.com/health
-
-# 2. Authentication
-curl -H "X-API-Key: $KEY" https://api.example.com/logs?limit=1
-
-# 3. HTTPS redirect
-curl -I http://api.example.com  # Should redirect to HTTPS
-
-# 4. Rate limiting
-for i in {1..100}; do 
-    curl https://api.example.com/health &
-done
-# Should see 429 errors
-
-# 5. Load test
-ab -n 1000 -c 10 https://api.example.com/health
+# Keep only last 30 days
+find "$BACKUP_DIR" -name "env_*" -mtime +30 -delete
+find "$BACKUP_DIR" -name "service_*" -mtime +30 -delete
 ```
 
 ## Security Hardening
 
-See [Security Guide](security.md) for complete security configuration.
+### Dedicated User
+
+```bash
+# Create dedicated user
+sudo useradd -r -s /bin/false rsyslox-api
+
+# Update service file to run as rsyslox-api
+sudo nano /etc/systemd/system/rsyslox.service
+# Change: User=rsyslox-api, Group=rsyslox-api
+
+# Fix permissions
+sudo chown rsyslox-api:rsyslox-api /opt/rsyslox/rsyslox
+sudo chmod 500 /opt/rsyslox/rsyslox
+sudo chown rsyslox-api:rsyslox-api /opt/rsyslox/.env
+sudo chmod 400 /opt/rsyslox/.env
+
+# Restart service
+sudo systemctl daemon-reload
+sudo systemctl restart rsyslox
+```
+
+### Database Security
+
+```sql
+-- Create READ-ONLY user
+CREATE USER 'rsyslox_readonly'@'localhost'
+  IDENTIFIED BY 'secure-password';
+
+-- Grant SELECT only on SystemEvents
+GRANT SELECT ON Syslog.SystemEvents TO 'rsyslox_readonly'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+Update `.env`:
+```bash
+DB_USER=rsyslox_readonly
+DB_PASS=secure-password
+```
+
+## Updates
+
+### Update Procedure
+
+```bash
+# 1. Download new version
+wget https://github.com/phil-bot/rsyslox/releases/download/v0.X.X/rsyslox-linux-amd64
+
+# 2. Stop service
+sudo systemctl stop rsyslox
+
+# 3. Backup current binary
+sudo cp /opt/rsyslox/rsyslox /opt/rsyslox/rsyslox.backup
+
+# 4. Replace binary
+sudo mv rsyslox-linux-amd64 /opt/rsyslox/rsyslox
+sudo chmod +x /opt/rsyslox/rsyslox
+
+# 5. Start service
+sudo systemctl start rsyslox
+
+# 6. Verify
+sudo systemctl status rsyslox
+curl http://localhost:8000/health
+```
+
+## Performance Tuning
+
+### Database Optimization
+
+```sql
+-- Add indexes for common queries
+CREATE INDEX idx_receivedat ON SystemEvents(ReceivedAt);
+CREATE INDEX idx_fromhost ON SystemEvents(FromHost);
+CREATE INDEX idx_priority ON SystemEvents(Priority);
+CREATE INDEX idx_facility ON SystemEvents(Facility);
+```
+
+### nginx Optimization
+
+```nginx
+# Increase worker connections
+events {
+    worker_connections 2048;
+}
+
+# Enable gzip compression
+gzip on;
+gzip_types application/json;
+gzip_min_length 1000;
+```
+
+## Troubleshooting
+
+### Service Won't Start
+
+```bash
+# Check logs
+sudo journalctl -u rsyslox -n 50
+
+# Check configuration
+sudo /opt/rsyslox/rsyslox --help
+
+# Test manually
+sudo -u rsyslox-api /opt/rsyslox/rsyslox
+```
+
+### High Memory Usage
+
+```bash
+# Check memory
+free -h
+
+# Restart service
+sudo systemctl restart rsyslox
+```
+
+### Database Connection Issues
+
+```bash
+# Test database connection
+mysql -u rsyslox_readonly -p Syslog -e "SELECT COUNT(*) FROM SystemEvents"
+
+# Check credentials in .env
+sudo cat /opt/rsyslox/.env | grep DB_
+```
+
+## More Resources
+
+- [Security Guide](security.md) - Security best practices
+- [Performance Guide](performance.md) - Performance tuning
+- [Troubleshooting](troubleshooting.md) - Common issues

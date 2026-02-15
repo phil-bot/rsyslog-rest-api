@@ -3,7 +3,7 @@ package database
 import (
 	"fmt"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/models"
+	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // QueryLogs executes a logs query with filters and pagination

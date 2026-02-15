@@ -9,6 +9,8 @@
 
 set -e
 
+cd $(git rev-parse --show-toplevel)
+
 # Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -60,7 +62,7 @@ cleanup() {
     echo ""
     echo -e "${BLUE}Cleaning up...${NC}"
     cd "$DOCKER_DIR"
-    docker-compose down -v 2>/dev/null || true
+    docker-compose down --remove-orphans --rmi all 2>/dev/null || true
     cd ..
     echo -e "${GREEN}✓ Cleanup complete${NC}"
 }
@@ -91,7 +93,7 @@ fi
 if [ "$SKIP_BUILD" = false ]; then
     echo -e "${BLUE}[2/7]${NC} Building static binary..."
     make build-static
-    if [ ! -f "$BUILD_DIR/rsyslog-rest-api" ]; then
+    if [ ! -f "$BUILD_DIR/rsyslox" ]; then
         echo -e "${RED}✗ Build failed!${NC}"
         exit 1
     fi
@@ -104,12 +106,12 @@ fi
 
 # Step 3: Verify binary
 echo -e "${BLUE}[3/7]${NC} Verifying binary..."
-if [ ! -f "$BUILD_DIR/rsyslog-rest-api" ]; then
+if [ ! -f "$BUILD_DIR/rsyslox" ]; then
     echo -e "${RED}✗ Binary not found! Run without --skip-build${NC}"
     exit 1
 fi
-ls -lh "$BUILD_DIR/rsyslog-rest-api"
-file "$BUILD_DIR/rsyslog-rest-api"
+ls -lh "$BUILD_DIR/rsyslox"
+file "$BUILD_DIR/rsyslox"
 echo -e "${GREEN}✓${NC} Binary OK"
 echo ""
 
@@ -131,7 +133,7 @@ for i in {1..30}; do
 done
 
 # Detect if API key is configured in Docker
-CONTAINER_API_KEY=$(docker-compose exec -T rsyslog grep "^API_KEY=" /opt/rsyslog-rest-api/.env 2>/dev/null | cut -d'=' -f2 || echo "")
+CONTAINER_API_KEY=$(docker-compose exec -T rsyslog grep "^API_KEY=" /opt/rsyslox/.env 2>/dev/null | cut -d'=' -f2 || echo "")
 if [ -n "$CONTAINER_API_KEY" ] && [ "$CONTAINER_API_KEY" != "none" ]; then
     API_KEY="$CONTAINER_API_KEY"
 fi
@@ -340,9 +342,9 @@ echo ""
 echo "=========================================="
 echo "Useful Commands"
 echo "=========================================="
-echo "  Logs:      docker logs rsyslog-rest-api-test"
-echo "  Shell:     docker exec -it rsyslog-rest-api-test bash"
-echo "  DB:        docker exec -it rsyslog-rest-api-test mysql -u rsyslog -ppassword Syslog"
+echo "  Logs:      docker logs rsyslox-test"
+echo "  Shell:     docker exec -it rsyslox-test bash"
+echo "  DB:        docker exec -it rsyslox-test mysql -u rsyslog -ppassword Syslog"
 echo "  Cleanup:   ./build-and-test.sh --cleanup"
 echo "  Re-test:   ./build-and-test.sh --skip-build"
 echo ""

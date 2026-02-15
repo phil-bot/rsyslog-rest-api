@@ -1,348 +1,277 @@
 # API Examples
 
-Practical examples for common use cases.
+Practical examples for using rsyslox API.
 
-## Basic Queries
+## Basic Usage
 
-### Latest Logs
+### Health Check
 
 ```bash
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?limit=10"
+curl http://localhost:8000/health
 ```
 
-### Specific Time Range
+Response:
+```json
+{
+  "status": "healthy",
+  "database": "connected",
+  "version": "v0.2.3",
+  "timestamp": "2025-02-15T10:30:00Z"
+}
+```
+
+### Retrieve Recent Logs
 
 ```bash
-# Last 24 hours
-START=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?start_date=$START&limit=50"
-
-# Yesterday
-START=$(date -u -d 'yesterday 00:00' '+%Y-%m-%dT%H:%M:%SZ')
-END=$(date -u -d 'yesterday 23:59' '+%Y-%m-%dT%H:%M:%SZ')
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?start_date=$START&end_date=$END"
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?limit=10"
 ```
 
 ## Filtering Examples
 
-### By Priority
-
-```bash
-# Only errors
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Priority=3"
-
-# Errors and warnings
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Priority=3&Priority=4"
-
-# Critical and above (0-2)
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Priority=0&Priority=1&Priority=2"
-```
-
-### By Host
+### Filter by Host
 
 ```bash
 # Single host
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?FromHost=webserver01"
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?FromHost=web01&limit=20"
 
-# Multiple hosts (v0.2.2+)
-curl -H "X-API-Key: $KEY" \
+# Multiple hosts (Multi-value!)
+curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/logs?FromHost=web01&FromHost=web02&FromHost=db01"
 ```
 
-### By Message Content
+### Filter by Priority
 
 ```bash
-# Search for keyword
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Message=login"
+# Errors only (Priority 3)
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?Priority=3&limit=50"
 
-# Multiple keywords (OR logic)
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Message=error&Message=failed&Message=timeout"
+# Errors and Critical (Multiple priorities)
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?Priority=2&Priority=3"
+```
+
+### Filter by Date Range
+
+```bash
+# Last hour
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?start_date=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)"
+
+# Specific time range
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?start_date=2025-02-15T08:00:00Z&end_date=2025-02-15T12:00:00Z"
 ```
 
 ### Combined Filters
 
 ```bash
-# Errors from specific hosts
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?FromHost=web01&FromHost=web02&Priority=3"
-
-# Complex query
-START=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?FromHost=web01&Priority=3&Priority=4&start_date=$START&limit=100"
+# Errors from specific hosts in last 24h
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?FromHost=web01&FromHost=web02&Priority=3&Priority=4&start_date=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
-## Pagination
-
-### Basic Pagination
+### Message Search
 
 ```bash
-# Page 1 (first 10)
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?limit=10&offset=0"
+# Search for "failed" in messages
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?Message=failed&limit=20"
 
-# Page 2 (next 10)
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?limit=10&offset=10"
-
-# Page 3 (next 10)
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?limit=10&offset=20"
-```
-
-### Iterate Through All Results
-
-```bash
-#!/bin/bash
-LIMIT=100
-OFFSET=0
-
-while true; do
-    RESPONSE=$(curl -s -H "X-API-Key: $KEY" \
-      "http://localhost:8000/logs?limit=$LIMIT&offset=$OFFSET")
-    
-    COUNT=$(echo "$RESPONSE" | jq '.rows | length')
-    
-    if [ "$COUNT" -eq 0 ]; then
-        break
-    fi
-    
-    echo "Processing $COUNT logs at offset $OFFSET"
-    # Process logs here
-    
-    OFFSET=$((OFFSET + LIMIT))
-done
+# Multiple search terms
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?Message=error&Message=failed"
 ```
 
 ## Metadata Queries
 
-### List Available Values
+### Get All Hosts
 
 ```bash
-# All hosts
-curl -H "X-API-Key: $KEY" \
+curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/meta/FromHost"
+```
 
-# All priorities
-curl -H "X-API-Key: $KEY" \
+Response:
+```json
+{
+  "column": "FromHost",
+  "values": ["web01", "web02", "db01", "app01"]
+}
+```
+
+### Get Priorities with Labels
+
+```bash
+curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/meta/Priority"
+```
 
-# All syslog tags
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/meta/SysLogTag"
+Response:
+```json
+{
+  "column": "Priority",
+  "values": [
+    {"val": 0, "label": "Emergency"},
+    {"val": 1, "label": "Alert"},
+    {"val": 2, "label": "Critical"},
+    {"val": 3, "label": "Error"},
+    {"val": 4, "label": "Warning"},
+    {"val": 5, "label": "Notice"},
+    {"val": 6, "label": "Informational"},
+    {"val": 7, "label": "Debug"}
+  ]
+}
 ```
 
 ### Filtered Metadata
 
 ```bash
-# Hosts that logged errors
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/meta/FromHost?Priority=3"
-
-# SysLogTags from web servers
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/meta/SysLogTag?FromHost=web01&FromHost=web02"
+# Get hosts that had errors
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/meta/FromHost?Priority=3&Priority=4"
 ```
 
-## Practical Use Cases
+## Pagination
 
-### Monitor Specific Application
+```bash
+# First page (10 items)
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?limit=10&offset=0"
+
+# Second page
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?limit=10&offset=10"
+
+# Third page
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?limit=10&offset=20"
+```
+
+## Advanced Examples
+
+### Monitor Specific Service
+
+```bash
+# nginx logs only
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?SysLogTag=nginx&limit=50"
+```
+
+### Security Audit
+
+```bash
+# Failed login attempts
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?SysLogTag=sshd&Message=Failed&Priority=4"
+```
+
+### Performance Monitoring
+
+```bash
+# Slow queries from database
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?FromHost=db01&Priority=4&Message=slow"
+```
+
+## Using with Scripts
+
+### Bash Script
 
 ```bash
 #!/bin/bash
-# Monitor nginx errors
+API_KEY="your-api-key-here"
+API_URL="http://localhost:8000"
 
-while true; do
-    curl -s -H "X-API-Key: $KEY" \
-      "http://localhost:8000/logs?SysLogTag=nginx&Priority=3&limit=5" \
-      | jq -r '.rows[] | "\(.ReceivedAt) \(.FromHost) \(.Message)"'
-    
-    sleep 60
-done
+# Get recent errors
+curl -s -H "X-API-Key: $API_KEY" \
+  "$API_URL/logs?Priority=3&limit=100" | jq '.rows[]'
 ```
 
-### Generate Error Report
-
-```bash
-#!/bin/bash
-# Daily error report
-
-DATE=$(date '+%Y-%m-%d')
-START="${DATE}T00:00:00Z"
-END="${DATE}T23:59:59Z"
-
-echo "Error Report for $DATE"
-echo "===================="
-echo ""
-
-# Get all errors
-ERRORS=$(curl -s -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Priority=3&start_date=$START&end_date=$END&limit=1000")
-
-# Count by host
-echo "$ERRORS" | jq -r '.rows[] | .FromHost' | sort | uniq -c | sort -rn
-
-echo ""
-echo "Total errors: $(echo "$ERRORS" | jq '.total')"
-```
-
-### Simple Alerting
-
-```bash
-#!/bin/bash
-# Alert on critical errors
-
-CHECK_MINUTES=5
-START=$(date -u -d "$CHECK_MINUTES minutes ago" '+%Y-%m-%dT%H:%M:%SZ')
-
-CRITICAL=$(curl -s -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Priority=2&start_date=$START" \
-  | jq '.total')
-
-if [ "$CRITICAL" -gt 0 ]; then
-    echo "ALERT: $CRITICAL critical errors in last $CHECK_MINUTES minutes!"
-    # Send notification (email, Slack, etc.)
-fi
-```
-
-## Language Examples
-
-### Python
+### Python Script
 
 ```python
 import requests
 import json
-from datetime import datetime, timedelta
 
-API_KEY = "your-api-key"
-BASE_URL = "http://localhost:8000"
+API_KEY = "your-api-key-here"
+API_URL = "http://localhost:8000"
 
 headers = {"X-API-Key": API_KEY}
 
-# Get latest logs
+# Get logs
 response = requests.get(
-    f"{BASE_URL}/logs",
+    f"{API_URL}/logs",
     headers=headers,
-    params={"limit": 10}
+    params={"Priority": 3, "limit": 100}
 )
 
 logs = response.json()
-print(f"Total logs: {logs['total']}")
-
 for log in logs['rows']:
-    print(f"{log['ReceivedAt']} [{log['Priority_Label']}] {log['Message']}")
-
-# Multi-value filter (v0.2.2+)
-response = requests.get(
-    f"{BASE_URL}/logs",
-    headers=headers,
-    params={
-        "FromHost": ["web01", "web02"],
-        "Priority": [3, 4],
-        "limit": 20
-    }
-)
+    print(f"{log['ReceivedAt']} - {log['FromHost']}: {log['Message']}")
 ```
 
-### JavaScript/Node.js
+### Node.js Script
 
 ```javascript
-const API_KEY = 'your-api-key';
-const BASE_URL = 'http://localhost:8000';
+const axios = require('axios');
 
-// Get latest logs
+const API_KEY = 'your-api-key-here';
+const API_URL = 'http://localhost:8000';
+
 async function getLogs() {
-    const response = await fetch(`${BASE_URL}/logs?limit=10`, {
-        headers: {
-            'X-API-Key': API_KEY
-        }
+  try {
+    const response = await axios.get(`${API_URL}/logs`, {
+      headers: { 'X-API-Key': API_KEY },
+      params: { Priority: 3, limit: 100 }
     });
     
-    const logs = await response.json();
-    console.log(`Total logs: ${logs.total}`);
-    
-    logs.rows.forEach(log => {
-        console.log(`${log.ReceivedAt} [${log.Priority_Label}] ${log.Message}`);
+    console.log('Total logs:', response.data.total);
+    response.data.rows.forEach(log => {
+      console.log(`${log.ReceivedAt} - ${log.FromHost}: ${log.Message}`);
     });
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
 }
 
-// Multi-value filter
-async function getErrorsFromMultipleHosts() {
-    const params = new URLSearchParams();
-    params.append('FromHost', 'web01');
-    params.append('FromHost', 'web02');
-    params.append('Priority', '3');
-    params.append('Priority', '4');
-    
-    const response = await fetch(`${BASE_URL}/logs?${params}`, {
-        headers: {
-            'X-API-Key': API_KEY
-        }
-    });
-    
-    return await response.json();
+getLogs();
+```
+
+## Error Handling
+
+### Structured Errors (v0.2.3+)
+
+```bash
+# Invalid priority
+curl -H "X-API-Key: YOUR_KEY" \
+  "http://localhost:8000/logs?Priority=99"
+```
+
+Response:
+```json
+{
+  "code": "INVALID_PRIORITY",
+  "message": "value 99 is out of range (must be 0-7)",
+  "details": "See RFC-5424 for valid priority levels",
+  "field": "Priority"
 }
 ```
 
-## Tips & Tricks
+## Tips & Best Practices
 
-### Performance
+1. **Use pagination** for large result sets
+2. **Combine filters** to narrow down results
+3. **Use date ranges** to limit time scope
+4. **Store API key securely** - never commit to git
+5. **Use HTTPS** in production
+6. **Implement rate limiting** in client code
+7. **Cache metadata** queries (hosts, priorities)
 
-```bash
-# Use smaller time windows
-START=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')
-# Better than querying last 30 days
+## More Resources
 
-# Limit results
-?limit=100  # Don't retrieve more than needed
-
-# Use indexed fields for filtering
-# Fast: Priority, Facility, FromHost, ReceivedAt
-# Slower: Message (full-text search)
-```
-
-### Output Formatting
-
-```bash
-# Pretty JSON
-curl ... | jq
-
-# Extract specific field
-curl ... | jq -r '.rows[] | .Message'
-
-# CSV format
-curl ... | jq -r '.rows[] | [.ReceivedAt, .FromHost, .Message] | @csv'
-
-# Table format
-curl ... | jq -r '.rows[] | "\(.ReceivedAt)\t\(.FromHost)\t\(.Message)"' | column -t
-```
-
-### Debugging
-
-```bash
-# Verbose output
-curl -v -H "X-API-Key: $KEY" "http://localhost:8000/logs"
-
-# Check response headers
-curl -I -H "X-API-Key: $KEY" "http://localhost:8000/logs"
-
-# Time the request
-time curl -H "X-API-Key: $KEY" "http://localhost:8000/logs?limit=1000"
-```
-
-## More Examples
-
-Need help with a specific use case? Check:
-
-- [Deployment Guide](../guides/deployment.md) - Production examples
-- [Troubleshooting](../guides/troubleshooting.md) - Debug examples
-- [GitHub Discussions](https://github.com/phil-bot/rsyslog-rest-api/discussions) - Community examples
+- [API Reference](reference.md) - Complete API documentation
+- [Troubleshooting](../guides/troubleshooting.md) - Common issues
+- [Security Guide](../guides/security.md) - Best practices

@@ -19,11 +19,11 @@ RUN apt-get update && \
 RUN rm -f /usr/sbin/policy-rc.d
 
 # Create installation directory
-RUN mkdir -p /opt/rsyslog-rest-api
+RUN mkdir -p /opt/rsyslox
 
 # Copy log generator
-COPY log-generator.sh /opt/rsyslog-rest-api/log-generator.sh
-RUN chmod +x /opt/rsyslog-rest-api/log-generator.sh
+COPY log-generator.sh /opt/rsyslox/log-generator.sh
+RUN chmod +x /opt/rsyslox/log-generator.sh
 
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh

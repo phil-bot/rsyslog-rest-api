@@ -1,6 +1,6 @@
 # Binaries
 build/
-rsyslog-rest-api
+rsyslox
 *.exe
 *.dll
 *.so

@@ -1,8 +1,8 @@
-# rsyslog REST API
+# rsyslox
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev/)
-[![Release](https://img.shields.io/github/v/release/phil-bot/rsyslog-rest-api)](https://github.com/phil-bot/rsyslog-rest-api/releases)
+[![Release](https://img.shields.io/github/v/release/phil-bot/rsyslox)](https://github.com/phil-bot/rsyslox/releases)
 
 High-performance REST API for rsyslog/MySQL written in Go.
 
@@ -26,11 +26,11 @@ A modern REST API server that queries rsyslog data from a MySQL/MariaDB database
 
 ```bash
 # Download latest release
-wget https://github.com/phil-bot/rsyslog-rest-api/releases/latest/download/rsyslog-rest-api-linux-amd64
+wget https://github.com/phil-bot/rsyslox/releases/latest/download/rsyslox-linux-amd64
 
 # Install
-chmod +x rsyslog-rest-api-linux-amd64
-sudo mv rsyslog-rest-api-linux-amd64 /usr/local/bin/rsyslog-rest-api
+chmod +x rsyslox-linux-amd64
+sudo mv rsyslox-linux-amd64 /usr/local/bin/rsyslox
 
 # Create configuration
 cat > .env << EOF
@@ -42,7 +42,7 @@ DB_PASS=your-password
 EOF
 
 # Run
-rsyslog-rest-api
+rsyslox
 ```
 
 **Test the API:**
@@ -66,28 +66,28 @@ cd docker && docker-compose up -d
 curl "http://localhost:8000/logs?limit=5"
 ```
 
-→ [Full Installation Guide](docs/installation.md)
+→ [Full Installation Guide](docs/getting-started/installation.md)
 
 ## 📚 Documentation
 
 ### Getting Started
-- [**Installation Guide**](docs/installation.md) - All installation methods
-- [**Configuration**](docs/configuration.md) - Complete configuration
-- [**Quick Examples**](docs/examples.md) - Practical examples
+- [**Installation Guide**](docs/getting-started/installation.md) - All installation methods
+- [**Configuration**](docs/getting-started/configuration.md) - Complete configuration
+- [**Quick Examples**](docs/api/examples.md) - Practical examples
 
 ### API & Usage
-- [**API Reference**](docs/api-reference.md) - All endpoints and parameters
-- [**Troubleshooting**](docs/troubleshooting.md) - Troubleshooting and FAQ
+- [**API Reference**](docs/api/reference.md) - All endpoints and parameters
+- [**Troubleshooting**](docs/guides/troubleshooting.md) - Troubleshooting and FAQ
 
 ### Administration
-- [**Deployment**](docs/deployment.md) - Production setup
-- [**Security**](docs/security.md) - Security best practices
+- [**Deployment**](docs/guides/deployment.md) - Production setup
+- [**Security**](docs/guides/security.md) - Security best practices
 
 ### Development
-- [**Docker Testing**](docs/docker.md) - Test environment
-- [**Development**](docs/development.md) - Architecture and contributing
+- [**Docker Testing**](docs/development/docker.md) - Test environment
+- [**Contributing**](docs/development/contributing.md) - Development guidelines
 
-→ [**Full Documentation**](docs/index.md)
+→ [**Full Documentation**](docs/README.md)
 
 ## 💡 Examples
 
@@ -121,16 +121,17 @@ curl -H "X-API-Key: YOUR_KEY" \
   "http://localhost:8000/meta/FromHost?Priority=3&Priority=4"
 ```
 
-→ [More Examples](docs/examples.md)
+→ [More Examples](docs/api/examples.md)
 
-## 🆕 What's New in v0.2.2?
+## 🆕 What's New in v0.2.3?
 
+- ✅ **Complete Modularization** - Clean code architecture
+- ✅ **Structured Error Responses** - Better API error handling
+- ✅ **DB Connection String Support** - Flexible database configuration
 - ✅ **Multi-Value Filters** - Multiple values per parameter
 - ✅ **Extended Columns** - All 25+ SystemEvents fields
-- ✅ **Live Log Generator** - Realistic test logs (Docker)
-- ✅ **Meta Endpoint** - Now also filters with multi-value
 
-→ [Changelog](docs/changelog.md)
+→ [Changelog](docs/development/changelog.md)
 
 ## 🗺️ Roadmap
 
@@ -143,18 +144,19 @@ curl -H "X-API-Key: YOUR_KEY" \
 - Statistics endpoint (`/stats`)
 - Aggregations
 - Timeline/Histogram
+- WebUI integration
 
-→ [GitHub Issues](https://github.com/phil-bot/rsyslog-rest-api/issues)
+→ [GitHub Issues](https://github.com/phil-bot/rsyslox/issues)
 
 ## 🤝 Support & Community
 
-- **Issues:** [GitHub Issues](https://github.com/phil-bot/rsyslog-rest-api/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/phil-bot/rsyslog-rest-api/discussions)
-- **Documentation:** [docs/](docs/index.md)
+- **Issues:** [GitHub Issues](https://github.com/phil-bot/rsyslox/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/phil-bot/rsyslox/discussions)
+- **Documentation:** [docs/](docs/README.md)
 
 ## 🙏 Contributing
 
-Contributions are welcome! Please read the [Contributing Guidelines](docs/development.md#contributing).
+Contributions are welcome! Please read the [Contributing Guidelines](docs/development/contributing.md).
 
 1. Fork the repository
 2. Create feature branch

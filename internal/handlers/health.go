@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/database"
-	"github.com/phil-bot/rsyslog-rest-api/internal/models"
+	"github.com/phil-bot/rsyslox/internal/database"
+	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // HealthHandler handles health check requests

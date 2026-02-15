@@ -2,12 +2,12 @@
 set -e
 
 echo "================================================"
-echo "rsyslog REST API - Test Environment"
+echo "rsyslox - Test Environment"
 echo "================================================"
 echo ""
 
 # Check if binary exists in mounted directory
-if [ ! -f /host-build/rsyslog-rest-api ]; then
+if [ ! -f /host-build/rsyslox ]; then
     echo "✗ ERROR: Binary not found!"
     echo ""
     echo "Please build first:"
@@ -18,9 +18,9 @@ fi
 
 # Copy binary to installation directory
 echo "[1/9] Installing API binary..."
-cp /host-build/rsyslog-rest-api /opt/rsyslog-rest-api/
-chmod +x /opt/rsyslog-rest-api/rsyslog-rest-api
-echo "✓ Binary installed ($(ls -lh /opt/rsyslog-rest-api/rsyslog-rest-api | awk '{print $5}'))"
+cp /host-build/rsyslox /opt/rsyslox/
+chmod +x /opt/rsyslox/rsyslox
+echo "✓ Binary installed ($(ls -lh /opt/rsyslox/rsyslox | awk '{print $5}'))"
 
 # Start MariaDB
 echo "[2/9] Starting MariaDB..."
@@ -115,7 +115,7 @@ echo "✓ Initial data inserted ($LOGCOUNT entries)"
 
 # Configure API
 echo "[8/9] Configuring API..."
-cat > /opt/rsyslog-rest-api/.env <<ENVEOF
+cat > /opt/rsyslox/.env <<ENVEOF
 API_KEY=${API_KEY}
 SERVER_HOST=0.0.0.0
 SERVER_PORT=${SERVER_PORT:-8000}
@@ -128,8 +128,8 @@ echo "✓ API configured"
 
 # Start API
 echo "[9/9] Starting API..."
-cd /opt/rsyslog-rest-api
-./rsyslog-rest-api > /var/log/rsyslog-rest-api.log 2>&1 &
+cd /opt/rsyslox
+./rsyslox > /var/log/rsyslox.log 2>&1 &
 API_PID=$!
 
 # Wait for API to start
@@ -138,7 +138,7 @@ if kill -0 $API_PID 2>/dev/null; then
     echo "✓ API started (PID: $API_PID)"
 else
     echo "✗ API failed to start!"
-    cat /var/log/rsyslog-rest-api.log
+    cat /var/log/rsyslox.log
     exit 1
 fi
 
@@ -152,8 +152,8 @@ fi
 # Start live log generator
 echo ""
 echo "Starting live log generator..."
-chmod +x /opt/rsyslog-rest-api/log-generator.sh
-/opt/rsyslog-rest-api/log-generator.sh > /var/log/log-generator.log 2>&1 &
+chmod +x /opt/rsyslox/log-generator.sh
+/opt/rsyslox/log-generator.sh > /var/log/log-generator.log 2>&1 &
 GENERATOR_PID=$!
 sleep 2
 
@@ -189,9 +189,9 @@ else
 fi
 echo ""
 echo "Monitor:"
-echo "  API logs:  tail -f /var/log/rsyslog-rest-api.log"
+echo "  API logs:  tail -f /var/log/rsyslox.log"
 echo "  Live logs: tail -f /var/log/log-generator.log"
-echo "  DB count:  docker exec rsyslog-rest-api-test mysql Syslog -e 'SELECT COUNT(*) FROM SystemEvents'"
+echo "  DB count:  docker exec rsyslox-test mysql Syslog -e 'SELECT COUNT(*) FROM SystemEvents'"
 echo ""
 
 # Keep container running

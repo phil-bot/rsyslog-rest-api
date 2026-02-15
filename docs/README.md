@@ -1,93 +1,20 @@
-# rsyslog REST API
+# rsyslox Documentation
 
-> High-performance REST API for rsyslog/MySQL written in Go
+Complete documentation for rsyslox - High-performance REST API for rsyslog/MySQL.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/phil-bot/rsyslog-rest-api/blob/main/LICENSE)
-[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/version-v0.2.3-success.svg)](https://github.com/phil-bot/rsyslog-rest-api/releases)
+## 📖 Overview
 
-## Features
+rsyslox is a modern REST API server that queries rsyslog data from a MySQL/MariaDB database and makes it accessible via HTTP/JSON. Perfect for monitoring dashboards, log analysis, and system integration.
 
-- 🚀 **High Performance** - Compiled in Go for maximum speed
-- 🔍 **Advanced Filtering** - Multi-value filters for complex queries
-- 📊 **All Fields** - Access to all 25+ SystemEvents columns
-- 🔐 **Secure** - API key authentication, SSL/TLS support
-- 🐳 **Docker Ready** - Complete test environment with live data
-- 📝 **REST API** - Clean JSON responses
-- 🎯 **RFC-5424 Compliant** - Proper syslog severity and facility labels
+## 🚀 Quick Start
 
-## What's New in v0.2.3
+New to rsyslox? Start here:
 
-- ✅ **Enhanced Multi-Value Filters** - Improved performance
-- ✅ **Better Error Messages** - Clear validation feedback
-- ✅ **Extended Meta Endpoint** - More filtering options
-- ✅ **Bug Fixes** - Various stability improvements
+- [Installation Guide](getting-started/installation.md)
+- [Configuration Reference](getting-started/configuration.md)
+- [Quick Start Tutorial](getting-started/quick-start.md)
 
-[View Full Changelog](development/changelog.md)
-
-## Quick Start
-
-### Installation
-
-```bash
-# Download latest release
-wget https://github.com/phil-bot/rsyslog-rest-api/releases/latest/download/rsyslog-rest-api-linux-amd64
-
-# Make executable
-chmod +x rsyslog-rest-api-linux-amd64
-sudo mv rsyslog-rest-api-linux-amd64 /usr/local/bin/rsyslog-rest-api
-```
-
-### Configuration
-
-```bash
-# Create .env file
-cat > .env << EOF
-API_KEY=$(openssl rand -hex 32)
-DB_HOST=localhost
-DB_NAME=Syslog
-DB_USER=rsyslog
-DB_PASS=your-password
-EOF
-```
-
-### Run
-
-```bash
-rsyslog-rest-api
-```
-
-[Full Installation Guide →](getting-started/installation.md)
-
-## Quick Examples
-
-### Retrieve Logs
-
-```bash
-# Latest 10 logs
-curl -H "X-API-Key: YOUR_KEY" \
-  "http://localhost:8000/logs?limit=10"
-
-# Errors from multiple hosts
-curl -H "X-API-Key: YOUR_KEY" \
-  "http://localhost:8000/logs?FromHost=web01&FromHost=web02&Priority=3"
-```
-
-### Query Metadata
-
-```bash
-# All available hosts
-curl -H "X-API-Key: YOUR_KEY" \
-  "http://localhost:8000/meta/FromHost"
-
-# Hosts that logged errors
-curl -H "X-API-Key: YOUR_KEY" \
-  "http://localhost:8000/meta/FromHost?Priority=3&Priority=4"
-```
-
-[More Examples →](api/examples.md)
-
-## Documentation
+## 📚 Documentation Sections
 
 ### Getting Started
 - [Installation Guide](getting-started/installation.md)
@@ -109,14 +36,36 @@ curl -H "X-API-Key: YOUR_KEY" \
 - [Contributing Guidelines](development/contributing.md)
 - [Changelog](development/changelog.md)
 
-## Support
+## 🔍 Common Tasks
 
-- **Issues:** [GitHub Issues](https://github.com/phil-bot/rsyslog-rest-api/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/phil-bot/rsyslog-rest-api/discussions)
+### Installation & Setup
+- [Binary Installation](getting-started/installation.md#binary-installation)
+- [Docker Setup](development/docker.md#quick-start)
+- [Production Deployment](guides/deployment.md#production-setup)
 
-## License
+### Configuration
+- [Generate API Key](getting-started/configuration.md#api-key)
+- [Database Configuration](getting-started/configuration.md#database)
+- [SSL/TLS Setup](guides/security.md#ssltls)
 
-MIT License - see [LICENSE](https://github.com/phil-bot/rsyslog-rest-api/blob/main/LICENSE) for details.
+### API Usage
+- [Health Check](api/reference.md#get-health)
+- [Retrieve Logs](api/reference.md#get-logs)
+- [Query Metadata](api/reference.md#get-meta)
+
+### Troubleshooting
+- [Common Issues](guides/troubleshooting.md#common-issues)
+- [FAQ](guides/troubleshooting.md#faq)
+- [Debug Mode](guides/troubleshooting.md#debug-mode)
+
+## 🆘 Support
+
+- **Issues:** [GitHub Issues](https://github.com/phil-bot/rsyslox/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/phil-bot/rsyslox/discussions)
+
+## 📝 License
+
+MIT License - see [LICENSE](https://github.com/phil-bot/rsyslox/blob/main/LICENSE) for details.
 
 ---
 

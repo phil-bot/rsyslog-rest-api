@@ -1,6 +1,6 @@
 # Installation
 
-Complete guide for installing rsyslog REST API.
+Complete guide for installing rsyslox.
 
 ## Prerequisites
 
@@ -44,16 +44,16 @@ Fastest and easiest method:
 
 ```bash
 # Download latest release
-wget https://github.com/phil-bot/rsyslog-rest-api/releases/latest/download/rsyslog-rest-api-linux-amd64
+wget https://github.com/phil-bot/rsyslox/releases/latest/download/rsyslox-linux-amd64
 
 # Make executable
-chmod +x rsyslog-rest-api-linux-amd64
+chmod +x rsyslox-linux-amd64
 
 # Move to system path
-sudo mv rsyslog-rest-api-linux-amd64 /usr/local/bin/rsyslog-rest-api
+sudo mv rsyslox-linux-amd64 /usr/local/bin/rsyslox
 
 # Verify
-rsyslog-rest-api --version
+rsyslox --version
 ```
 
 ### Method 2: From Source
@@ -67,8 +67,8 @@ For developers:
 # - make
 
 # Clone repository
-git clone https://github.com/phil-bot/rsyslog-rest-api.git
-cd rsyslog-rest-api
+git clone https://github.com/phil-bot/rsyslox.git
+cd rsyslox
 
 # Build and install
 make build-static
@@ -81,10 +81,10 @@ Create configuration file:
 
 ```bash
 # Create directory
-sudo mkdir -p /opt/rsyslog-rest-api
+sudo mkdir -p /opt/rsyslox
 
 # Create .env
-sudo nano /opt/rsyslog-rest-api/.env
+sudo nano /opt/rsyslox/.env
 ```
 
 Minimal configuration:
@@ -114,8 +114,8 @@ openssl rand -hex 32
 
 ```bash
 # Start in foreground (testing)
-cd /opt/rsyslog-rest-api
-rsyslog-rest-api
+cd /opt/rsyslox
+rsyslox
 ```
 
 ### Health Check
@@ -137,7 +137,7 @@ Expected response:
 
 ```bash
 # Get API key
-API_KEY=$(sudo grep "^API_KEY=" /opt/rsyslog-rest-api/.env | cut -d'=' -f2)
+API_KEY=$(sudo grep "^API_KEY=" /opt/rsyslox/.env | cut -d'=' -f2)
 
 # Test API
 curl -H "X-API-Key: $API_KEY" "http://localhost:8000/logs?limit=5"
@@ -154,15 +154,15 @@ For production deployment with systemd service:
 Common installation issues:
 
 **Binary not found:**
-- Check path: `which rsyslog-rest-api`
-- Verify permissions: `ls -la /usr/local/bin/rsyslog-rest-api`
+- Check path: `which rsyslox`
+- Verify permissions: `ls -la /usr/local/bin/rsyslox`
 
 **Database connection failed:**
 - Check credentials in `.env`
 - Test MySQL connection: `mysql -u rsyslog -p Syslog`
 
 **Permission denied:**
-- Fix `.env` permissions: `sudo chmod 600 /opt/rsyslog-rest-api/.env`
+- Fix `.env` permissions: `sudo chmod 600 /opt/rsyslox/.env`
 
 For more issues see [Troubleshooting Guide](../guides/troubleshooting.md).
 

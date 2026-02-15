@@ -1,4 +1,4 @@
-module github.com/phil-bot/rsyslog-rest-api
+module github.com/phil-bot/rsyslox
 
 go 1.22
 

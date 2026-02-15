@@ -3,9 +3,9 @@ package main
 import (
 	"log"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/config"
-	"github.com/phil-bot/rsyslog-rest-api/internal/database"
-	"github.com/phil-bot/rsyslog-rest-api/internal/server"
+	"github.com/phil-bot/rsyslox/internal/config"
+	"github.com/phil-bot/rsyslox/internal/database"
+	"github.com/phil-bot/rsyslox/internal/server"
 )
 
 // Version is set at build time via ldflags
@@ -13,7 +13,7 @@ var Version = "dev"
 
 func main() {
 	log.Println("========================================")
-	log.Println("rsyslog REST API")
+	log.Println("rsyslox")
 	log.Println("========================================")
 
 	// Load configuration

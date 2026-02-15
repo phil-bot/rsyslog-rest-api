@@ -2,9 +2,10 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 )
 
-// CORS returns a middleware that handles CORS headers
+// CORS returns a middleware that handles CORS
 func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -19,11 +20,10 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 				}
 			}
 
-			// Set CORS headers if allowed
 			if allowed {
 				if origin != "" {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
-				} else if allowedOrigins[0] == "*" {
+				} else if len(allowedOrigins) == 1 && allowedOrigins[0] == "*" {
 					w.Header().Set("Access-Control-Allow-Origin", "*")
 				}
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -31,13 +31,26 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 				w.Header().Set("Access-Control-Max-Age", "3600")
 			}
 
-			// Handle preflight
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
+			// Handle preflight requests
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// isOriginAllowed checks if an origin is in the allowed list
+func isOriginAllowed(origin string, allowedOrigins []string) bool {
+	for _, allowed := range allowedOrigins {
+		if allowed == "*" {
+			return true
+		}
+		if strings.EqualFold(allowed, origin) {
+			return true
+		}
+	}
+	return false
 }

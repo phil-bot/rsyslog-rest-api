@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/models"
+	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // Auth returns a middleware that validates API key authentication

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rsyslog-rest-api-test
+    container_name: rsyslox-test
     ports:
       - "8000:8000"
     volumes:

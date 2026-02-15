@@ -7,7 +7,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/phil-bot/rsyslog-rest-api/internal/config"
+	"github.com/phil-bot/rsyslox/internal/config"
 )
 
 // DB wraps the database connection and provides helper methods
@@ -62,7 +62,27 @@ func (db *DB) initialize() error {
 
 	return nil
 }
+/*
+// createIndexes creates recommended indexes for better performance
+func (db *DB) createIndexes() error {
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_receivedat ON SystemEvents(ReceivedAt)",
+		"CREATE INDEX IF NOT EXISTS idx_fromhost ON SystemEvents(FromHost)",
+		"CREATE INDEX IF NOT EXISTS idx_priority ON SystemEvents(Priority)",
+		"CREATE INDEX IF NOT EXISTS idx_facility ON SystemEvents(Facility)",
+	}
 
+	for _, index := range indexes {
+		if _, err := db.Exec(index); err != nil {
+			log.Printf("Warning: failed to create index: %v", err)
+			// Continue on index errors (they may already exist)
+		}
+	}
+
+	log.Println("✓ Database indexes checked/created")
+	return nil
+}
+*/
 // loadColumns loads all column names from SystemEvents table
 func (db *DB) loadColumns() error {
 	query := "SHOW COLUMNS FROM SystemEvents"

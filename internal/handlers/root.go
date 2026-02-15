@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/models"
+	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // RootHandler handles root endpoint requests
@@ -47,7 +47,7 @@ func (h *RootHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Otherwise show API info
 	respondJSON(w, http.StatusOK, models.RootResponse{
-		Name:    "rsyslog REST API",
+		Name:    "rsyslox",
 		Version: h.version,
 		Endpoints: map[string]string{
 			"logs":   "/logs?limit=10&Priority=3",

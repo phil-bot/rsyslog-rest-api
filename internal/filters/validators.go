@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/phil-bot/rsyslog-rest-api/internal/models"
+	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // ValidatePriorities validates priority values and returns them as integers
