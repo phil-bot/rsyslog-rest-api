@@ -6,41 +6,7 @@
 
 High-performance REST API for rsyslog/MySQL written in Go. It queries rsyslog data from a MySQL/MariaDB database and makes it accessible via HTTP/JSON. Perfect for monitoring dashboards, log analysis, and system integration.
 
- → **[Main Repository](https://github.com/phil-bot/rsyslog-rest-api)**
-
-# Documentation
-
 Welcome to the complete documentation of the rsyslog REST API project.
-
-## 📖 Overview
-
-This documentation is divided into different sections depending on your role and requirements.
-
-### Getting Started
-
-| Document | Description |
-|----------|-------------|
-| [**Installation**](installation.md) | All installation methods (Binary, Source, Package) |
-| [**Configuration**](configuration.md) | Complete configuration reference |
-| [**Quick Examples**](examples.md) | Practical examples for common use cases |
-
-### Usage & API
-
-| Document | Description |
-|----------|-------------|
-| [**API Reference**](api-reference.md) | Complete API documentation with all endpoints |
-| [**Deployment**](deployment.md) | Production setup, systemd, reverse proxy |
-| [**Security**](security.md) | Best practices for secure operation |
-| [**Performance**](performance.md) | Optimization and benchmarks |
-| [**Troubleshooting**](troubleshooting.md) | Common issues, solutions, and FAQ |
-| [**Changelog**](changelog.md) | Version history and breaking changes |
-
-### Test environment
-
-| Document | Description |
-|----------|-------------|
-| [**Docker Testing**](docker.md) | Test environment with live data |
-| [**Development**](development.md) | Architecture, build, contributing |
 
 ## 🔍 Quick Access
 

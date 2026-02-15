@@ -2,22 +2,23 @@
 
 * [Home](/)
 
-### Getting Started
+* Getting Started
 
-* [**Installation**](installation.md) All installation methods (Binary, Source, Package)
-* [**Configuration**](configuration.md) Complete configuration reference
-* [**Quick Examples**](examples.md) Practical examples for common use cases
+  * [**Installation**](installation.md)
+  * [**Configuration**](configuration.md)
+  * [**Quick Examples**](examples.md)
 
-### Usage & API
+* Usage & API
 
-* [**API Reference**](api-reference.md) Complete API documentation with all endpoints
-* [**Deployment**](deployment.md) Production setup, systemd, reverse proxy
-* [**Security**](security.md) Best practices for secure operation
-* [**Performance**](performance.md) Optimization and benchmarks
-* [**Troubleshooting**](troubleshooting.md) Common issues, solutions, and FAQ
-* [**Changelog**](changelog.md) Version history and breaking changes
+  * [**API Reference**](api-reference.md)
+  * [**Deployment**](deployment.md)
+  * [**Security**](security.md)
+  * [**Performance**](performance.md)
+  * [**Troubleshooting**](troubleshooting.md)
 
-### Test environment
+* Test environment
 
-* [**Docker Testing**](docker.md) Test environment with live data
-* [**Development**](development.md) Architecture, build, contributing
+  * [**Docker Testing**](docker.md)
+  * [**Development**](development.md)
+  
+* [**Changelog**](changelog.md)
