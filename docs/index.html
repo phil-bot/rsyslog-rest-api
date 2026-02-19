@@ -85,7 +85,7 @@
       
       // Sidebar
       loadSidebar: true,
-      subMaxLevel: 3,
+      subMaxLevel: 2,
       sidebarDisplayLevel: 1,
       
       // Navbar
@@ -137,28 +137,6 @@
           readyTransition : true, // default
           responsiveTables: true  // default
       },
-
-      // Footer
-      plugins: [
-        function(hook, vm) {
-          hook.beforeEach(function(html) {
-            return html;
-          });
-          
-          hook.afterEach(function(html) {
-            var footer = [
-              '<hr/>',
-              '<footer>',
-              '<span>Documentation for <a href="https://github.com/phil-bot/rsyslog-rest-api" target="_blank">rsyslox</a> v0.2.3</span><br>',
-              '<span>Made with ❤️ for the syslog community | ',
-              '<a href="https://github.com/phil-bot/rsyslox/blob/main/LICENSE" target="_blank">MIT License</a></span>',
-              '</footer>'
-            ].join('');
-            
-            return html + footer;
-          });
-        }
-      ]
     }
   </script>
 

@@ -12,9 +12,10 @@
 * [Cleanup / Housekeeping](guides/cleanup.md)
 * [Troubleshooting](guides/troubleshooting.md)
 * **Development**
-* [Docker Testing](development/docker.md)
+* [Docker Testing Environment](development/docker.md)
 * [Contributing](development/contributing.md)
 * [Changelog](development/changelog.md)
 * **Links**
-* [GitHub](https://github.com/phil-bot/rsyslog-rest-api)
-* [Report Issue](https://github.com/phil-bot/rsyslog-rest-api/issues)
+* [!GitHub](https://github.com/phil-bot/rsyslox)
+* [!Report Issue](https://github.com/phil-bot/rsyslox)
+* [!MIT License](https://github.com/phil-bot/rsyslox/blob/main/LICENSE)

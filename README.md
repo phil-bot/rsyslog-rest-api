@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/rsyslox_light.svg" alt="rsyslox" width="180"/>
+  <img src="docs/rsyslox_light.svg" alt="rsyslox"/>
 </div>
 
 # rsyslox

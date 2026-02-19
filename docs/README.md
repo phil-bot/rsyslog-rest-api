@@ -1,79 +1,44 @@
 <div align="center">
-  <img src="rsyslox_light.svg" alt="rsyslox"/>
+  <img src="docs/rsyslox_light.svg" alt="rsyslox"/>
 </div>
 
+# rsyslox
 
-# rsyslox Documentation
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/phil-bot/rsyslox)](https://github.com/phil-bot/rsyslox/releases)
 
-Complete documentation for rsyslox - High-performance REST API for rsyslog/MySQL.
+rsyslox is a lightweight, high-performance REST API for accessing rsyslog data stored in MySQL/MariaDB. It exposes the `SystemEvents` table via a clean HTTP/JSON interface with filtering, pagination, and metadata queries — making it easy to integrate syslog data into dashboards, monitoring tools, or custom scripts.
 
-## 📖 Overview
+Written in Go, it is designed to run as a standalone binary with minimal dependencies.
 
-rsyslox is a modern REST API server that queries rsyslog data from a MySQL/MariaDB database and makes it accessible via HTTP/JSON. Perfect for monitoring dashboards, log analysis, and system integration.
+## 📖 Documentation
+
+**[https://rsyslox.grothu.net](https://rsyslox.grothu.net)**
 
 ## 🚀 Quick Start
 
-New to rsyslox? Start here:
+```bash
+# Download latest release
+wget https://github.com/phil-bot/rsyslox/releases/latest/download/rsyslox-linux-amd64
 
-- [Installation Guide](getting-started/installation.md)
-- [Configuration Reference](getting-started/configuration.md)
-- [Quick Start Tutorial](getting-started/quick-start.md)
+# Install
+chmod +x rsyslox-linux-amd64
+sudo mv rsyslox-linux-amd64 /usr/local/bin/rsyslox
 
-## 📚 Documentation Sections
+# Create configuration
+cat > .env << EOF
+API_KEY=$(openssl rand -hex 32)
+DB_HOST=localhost
+DB_NAME=Syslog
+DB_USER=rsyslog
+DB_PASS=your-password
+EOF
 
-### Getting Started
-- [Installation Guide](getting-started/installation.md)
-- [Configuration Reference](getting-started/configuration.md)
-- [Quick Start Tutorial](getting-started/quick-start.md)
+# Run
+rsyslox
+```
 
-### API Documentation
-- [API Reference](api/reference.md) - Complete endpoint documentation
-- [Examples](api/examples.md) - Practical usage examples
+## 📄 License
 
-### Guides
-- [Production Deployment](guides/deployment.md)
-- [Security Best Practices](guides/security.md)
-- [Performance Tuning](guides/performance.md)
-- [Cleanup / Housekeeping](guides/cleanup.md)
-- [Troubleshooting](guides/troubleshooting.md)
-
-### Development
-- [Docker Testing Environment](development/docker.md)
-- [Contributing Guidelines](development/contributing.md)
-- [Changelog](development/changelog.md)
-
-## 🔍 Common Tasks
-
-### Installation & Setup
-- [Binary Installation](getting-started/installation.md#binary-installation)
-- [Docker Setup](development/docker.md#quick-start)
-- [Production Deployment](guides/deployment.md#production-setup)
-
-### Configuration
-- [Generate API Key](getting-started/configuration.md#api-key)
-- [Database Configuration](getting-started/configuration.md#database)
-- [SSL/TLS Setup](guides/security.md#ssltls)
-- [Cleanup Setup](guides/cleanup.md#configuration)
-
-### API Usage
-- [Health Check](api/reference.md#get-health)
-- [Retrieve Logs](api/reference.md#get-logs)
-- [Query Metadata](api/reference.md#get-meta)
-
-### Troubleshooting
-- [Common Issues](guides/troubleshooting.md#common-issues)
-- [FAQ](guides/troubleshooting.md#faq)
-- [Debug Mode](guides/troubleshooting.md#debug-mode)
-
-## 🆘 Support
-
-- **Issues:** [GitHub Issues](https://github.com/phil-bot/rsyslox/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/phil-bot/rsyslox/discussions)
-
-## 📝 License
-
-MIT License - see [LICENSE](https://github.com/phil-bot/rsyslox/blob/main/LICENSE) for details.
-
----
-
-**Built with ❤️ for the syslog community**
+MIT License - see [LICENSE](LICENSE) for details.
