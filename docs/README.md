@@ -1,3 +1,8 @@
+<div align="center">
+  <img src="rsyslox_light.svg" alt="rsyslox"/>
+</div>
+
+
 # rsyslox Documentation
 
 Complete documentation for rsyslox - High-performance REST API for rsyslog/MySQL.
