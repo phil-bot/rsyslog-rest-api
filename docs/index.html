@@ -14,8 +14,8 @@
 
   
   <!-- Custom Styles -->
-  <style>
-  /*
+  <!--<style>
+
     :root {
       --theme-color: #00ADD8;
       --base-font-size: 16px;
@@ -72,8 +72,8 @@
       font-weight: 500;
       margin-left: 8px;
     }
-    */
-  </style>
+
+  </style>-->
 </head>
 <body>
   <div id="app">Loading...</div>
@@ -81,7 +81,7 @@
   <script>
     window.$docsify = {
       name: '{rsyslox}',
-      repo: 'https://github.com/phil-bot/rsyslox,
+      repo: 'https://github.com/phil-bot/rsyslox',
       
       // Sidebar
       loadSidebar: true,
@@ -93,7 +93,6 @@
       
       // Cover Page (optional)
       coverpage: false,
-      
       // Search
       search: {
         maxAge: 86400000,
@@ -119,6 +118,7 @@
         successText: 'Copied!'
       },
       
+      <!--
       // Tabs
       tabs: {
         persist: true,
@@ -127,11 +127,17 @@
         tabComments: true,
         tabHeadings: true
       },
+      -->
       
       // Appearance
       themeColor: '#00ADD8',
       auto2top: true,
       
+      themeable: {
+          readyTransition : true, // default
+          responsiveTables: true  // default
+      },
+
       // Footer
       plugins: [
         function(hook, vm) {
@@ -155,6 +161,7 @@
       ]
     }
   </script>
+
   
   <!-- Docsify Core -->
   <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
@@ -177,3 +184,4 @@
   <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-javascript.min.js"></script>
 </body>
 </html>
+b
