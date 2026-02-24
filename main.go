@@ -45,7 +45,7 @@ func main() {
 
 	if setupMode {
 		log.Println("⚠️  No configuration found — starting in setup mode")
-		log.Printf("   Open http://localhost:%d in your browser to complete setup", cfg.Server.Port)
+		log.Printf("   Setup wizard available at http://<this-host>:%d", cfg.Server.Port)
 		srv := server.New(cfg, nil, Version, true)
 		srv.SetupRoutes()
 		if err := srv.Start(); err != nil {

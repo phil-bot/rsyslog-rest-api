@@ -85,6 +85,28 @@ echo -e "${BOLD}rsyslox Installer${NC}"
 echo "══════════════════════════════════════"
 echo ""
 
+# ── Port selection ────────────────────────────────────────────────────────────
+# Only ask when no existing config is present (first-run).
+SETUP_PORT=$DEFAULT_PORT
+if [[ ! -f "$CONFIG_DIR/config.toml" ]]; then
+    echo -e "${BOLD}Port configuration${NC}"
+    echo "  rsyslox needs a TCP port that is reachable in your firewall."
+    echo "  Press Enter to accept the default."
+    echo ""
+    while true; do
+        read -rp "  Port [${DEFAULT_PORT}]: " INPUT_PORT
+        INPUT_PORT="${INPUT_PORT:-$DEFAULT_PORT}"
+        if [[ "$INPUT_PORT" =~ ^[0-9]+$ ]] && (( INPUT_PORT >= 1 && INPUT_PORT <= 65535 )); then
+            SETUP_PORT=$INPUT_PORT
+            break
+        fi
+        echo -e "  ${RED}Invalid port — must be a number between 1 and 65535.${NC}"
+    done
+    echo ""
+    success "Port set to $SETUP_PORT"
+    echo ""
+fi
+
 # ── System user ───────────────────────────────────────────────────────────────
 header "Creating system user"
 
@@ -117,8 +139,8 @@ success "Config directory: $CONFIG_DIR (root:$SERVICE_GROUP, 750)"
 # ── Systemd service ───────────────────────────────────────────────────────────
 header "Installing systemd service"
 
-# Detect existing port from config if present
-CONFIGURED_PORT=$DEFAULT_PORT
+# Detect existing port from config if present (re-install case)
+CONFIGURED_PORT=$SETUP_PORT
 if [[ -f "$CONFIG_DIR/config.toml" ]]; then
     PORT_FROM_CONFIG=$(grep -oP 'port\s*=\s*\K\d+' "$CONFIG_DIR/config.toml" 2>/dev/null | head -1 || true)
     [[ -n "$PORT_FROM_CONFIG" ]] && CONFIGURED_PORT="$PORT_FROM_CONFIG"
@@ -139,6 +161,7 @@ Group=$SERVICE_GROUP
 ExecStart=$INSTALL_DIR/$BINARY_NAME
 Restart=on-failure
 RestartSec=5s
+Environment=RSYSLOX_PORT=$CONFIGURED_PORT
 
 # Security hardening
 NoNewPrivileges=true
@@ -146,9 +169,6 @@ ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=$CONFIG_DIR
 PrivateTmp=true
-
-# Environment — override config path if needed
-# Environment=RSYSLOX_CONFIG=/etc/rsyslox/config.toml
 
 [Install]
 WantedBy=multi-user.target
@@ -197,7 +217,7 @@ success "rsyslox is running in setup mode."
 echo ""
 
 # Try to open browser automatically
-SETUP_URL="http://localhost:${DEFAULT_PORT}"
+SETUP_URL="http://localhost:${SETUP_PORT}"
 if command -v xdg-open &>/dev/null && [[ -n "${DISPLAY:-}" ]]; then
     xdg-open "$SETUP_URL" 2>/dev/null &
 elif command -v open &>/dev/null; then
@@ -210,7 +230,7 @@ echo "════════════════════════�
 echo ""
 echo -e "  ${BOLD}Next step:${NC} Complete setup in your browser:"
 echo ""
-echo -e "    ${BLUE}${BOLD}http://$(hostname -I | awk '{print $1}'):${DEFAULT_PORT}${NC}"
+echo -e "    ${BLUE}${BOLD}http://$(hostname -I | awk '{print $1}'):${SETUP_PORT}${NC}"
 echo ""
 echo "  The setup wizard is reachable from any machine on your network."
 echo "  Once setup is complete, rsyslox will require authentication."

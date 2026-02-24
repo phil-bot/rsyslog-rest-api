@@ -34,7 +34,15 @@ func Load() (*Config, bool, error) {
 	cfg.InstallPath = installPath()
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// No config file → setup wizard needed
+		// No config file → setup wizard needed.
+		// Allow the port to be overridden via RSYSLOX_PORT so the installer
+		// can pass a user-chosen port before any config.toml exists.
+		if p := os.Getenv("RSYSLOX_PORT"); p != "" {
+			var port int
+			if _, err := fmt.Sscanf(p, "%d", &port); err == nil && port > 0 && port <= 65535 {
+				cfg.Server.Port = port
+			}
+		}
 		return cfg, true, nil
 	}
 
