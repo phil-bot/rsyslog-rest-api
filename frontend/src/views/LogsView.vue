@@ -128,13 +128,17 @@ function computePageSize() {
   // Estimate natural row height from the current base font size.
   // td has .38rem top + .38rem bottom padding; text is .8rem at 1.5 line-height.
   const basePx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14
-  const naturalRowH = Math.ceil(basePx * (0.76 + 0.8 * 1.5))
+
+  //  const naturalRowH = Math.ceil(basePx * (0.76 + 0.8 * 1.5))
+  // set naturalRowH to fixed value
+  const naturalRowH = 31
 
   // Number of rows that fit — subtract 1 so the last row is never clipped by pagination.
-  const n = Math.max(5, Math.floor(available / naturalRowH) - 1)
+  const n = Math.max(5, Math.floor(available / naturalRowH))
 
   // Exact row height so n rows fill the container with zero leftover space.
-  const exactRowH = Math.floor(available / n)
+  //const exactRowH = Math.floor((available / n)).toFixed(2)
+  const exactRowH = ((available / n)).toFixed(2)
 
   // Push --row-h into the table-scroll element; LogTable uses it for td min-height.
   const tableScroll = wrap.querySelector('.table-scroll')
