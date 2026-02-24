@@ -10,5 +10,5 @@ make all
 cd "$DOCKER_DIR" || exit 1
 
 docker compose restart
-docker exec -it rsyslox-test /opt/rsyslox/log-generator.sh
+#docker exec -it rsyslox-test /opt/rsyslox/log-generator.sh
 

@@ -22,7 +22,7 @@ RUN rm -f /usr/sbin/policy-rc.d
 RUN mkdir -p /opt/rsyslox
 
 # Copy log generator
-COPY log-generator.sh /opt/rsyslox/log-generator.sh
+COPY ../scripts/log-generator.sh /opt/rsyslox/log-generator.sh
 RUN chmod +x /opt/rsyslox/log-generator.sh
 
 # Copy entrypoint

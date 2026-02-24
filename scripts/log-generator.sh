@@ -1,5 +1,5 @@
 #!/bin/bash
-# Advanced Live Log Generator for rsyslog REST API
+# Advanced Live Log Generator for rsyslox
 # Generates realistic syslog entries with ALL fields filled
 
 set -e
@@ -60,31 +60,32 @@ generate_message() {
         4) # Warning
             local variants=(
                 "Slow query detected: $(random_range 1000 5000)ms"
-                "Failed login attempt"
-                "Connection timeout"
-                "Retry attempt failed"
-                "Queue size growing"
-                "Response time degraded"
+                "High memory usage: $(random_range 85 95)%"
+                "SSL certificate expiring soon"
+                "Failed to connect to upstream server"
+                "Request timeout: $(random_range 30 60)s"
+                "Connection pool exhausted"
             )
             msg=$(random_element "${variants[@]}")
             ;;
         3) # Error
             local variants=(
-                "Connection refused"
-                "Database error"
+                "Authentication failed for user"
+                "Database connection failed"
                 "Failed to write to disk"
-                "Service crashed"
-                "Authentication failed"
-                "Cannot allocate memory"
+                "HTTP 500 Internal Server Error"
+                "Service unavailable"
+                "Configuration syntax error"
             )
             msg=$(random_element "${variants[@]}")
             ;;
         2) # Critical
             local variants=(
-                "CRITICAL: Service down"
-                "CRITICAL: Disk full"
-                "CRITICAL: Database connection lost"
-                "CRITICAL: Security breach detected"
+                "System crash detected"
+                "Kernel panic"
+                "Out of memory killer invoked"
+                "RAID array degraded"
+                "Critical security breach detected"
             )
             msg=$(random_element "${variants[@]}")
             ;;
@@ -93,34 +94,45 @@ generate_message() {
     echo "$msg"
 }
 
-# Generate realistic log entry
+# Generate a log entry with ALL fields
 generate_log() {
     local priority=$1
+
+    # Select random host and tag
     local host=$(random_element "${HOSTS[@]}")
     local tag=$(random_element "${TAGS[@]}")
     local user=$(random_element "${USERS[@]}")
     local event_source=$(random_element "${EVENT_SOURCES[@]}")
-    local facility=1  # user facility
 
-    # Generate timestamps with slight offset
+    # Generate timestamps
     local received_at=$(date '+%Y-%m-%d %H:%M:%S')
-    local device_time=$(date -d "2 seconds ago" '+%Y-%m-%d %H:%M:%S')
+    local device_time=$(date '+%Y-%m-%d %H:%M:%S')
+
+    # Calculate facility based on tag
+    local facility=1
+    case $tag in
+        sshd|systemd) facility=1 ;;
+        nginx|iptables) facility=1 ;;
+        mysqld|postgres) facility=4 ;;
+        node|docker) facility=16 ;;
+        postfix) facility=3 ;;
+    esac
 
     # Generate message
     local message=$(generate_message $priority)
 
-    # Generate realistic extended fields
+    # Generate extended fields
     local customer_id=$((RANDOM % 100 + 1))
-    local nt_severity=$((priority * 1000))
-    local importance=$((6 - priority + 1))
+    local nt_severity=$((RANDOM % 5))
+    local importance=$((RANDOM % 5 + 1))
     local event_category=$((RANDOM % 10 + 1))
-    local event_id=0
 
-    # Realistic Event IDs based on tag
-    case $tag in
-        sshd) event_id=$((4624 + RANDOM % 10)) ;;
-        nginx) event_id=$((RANDOM % 300 + 200)) ;;
-        mysqld) event_id=$((1000 + RANDOM % 100)) ;;
+    # Event ID based on source
+    local event_id
+    case $event_source in
+        auth-service) event_id=$((4624 + RANDOM % 10)) ;;
+        web-service) event_id=$((RANDOM % 100 + 200)) ;;
+        db-service) event_id=$((1000 + RANDOM % 100)) ;;
         *) event_id=$((RANDOM % 1000 + 1000)) ;;
     esac
 

@@ -133,3 +133,10 @@ echo "  10 log entries are already seeded and waiting."
 echo ""
 
 exec "$@"
+
+echo ""
+echo "================================================"
+echo "  Starting Log-Generator"
+echo "================================================"
+echo ""
+/opt/rsyslox/log-generator.sh
