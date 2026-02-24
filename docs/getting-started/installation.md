@@ -52,7 +52,7 @@ At the end the installer prints the setup wizard URL. Open it in your browser to
 
 ## Setup Wizard
 
-On first start, rsyslox has no configuration and serves a setup wizard on **`http://localhost:8000`** (accessible from localhost only).
+On first start, rsyslox has no configuration and serves a setup wizard on **`http://<server-ip>:8000`** — reachable from any machine on the network until setup is complete.
 
 Fill in:
 

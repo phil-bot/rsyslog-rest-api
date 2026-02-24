@@ -47,12 +47,10 @@ sudo chmod +x /opt/rsyslox/rsyslox
 
 ### Setup Wizard Not Accessible
 
-The wizard is served on `http://localhost:8000` and is **only accessible from localhost** until configured. If you're on a remote machine:
+The wizard runs on port `8000` and is reachable from **any machine on the network** while no config exists. If you cannot reach it, check the firewall:
 
 ```bash
-# SSH tunnel from your workstation
-ssh -L 8000:localhost:8000 user@yourserver
-# Then open http://localhost:8000 locally
+sudo ufw allow 8000/tcp
 ```
 
 ### Database Connection Failed

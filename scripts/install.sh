@@ -182,7 +182,7 @@ fi
 # ── First-run: start in setup mode ────────────────────────────────────────────
 header "First-run setup"
 
-info "Starting rsyslox in setup mode (localhost only)…"
+info "Starting rsyslox in setup mode…"
 systemctl enable rsyslox
 systemctl start rsyslox
 sleep 1
@@ -210,10 +210,10 @@ echo "════════════════════════�
 echo ""
 echo -e "  ${BOLD}Next step:${NC} Complete setup in your browser:"
 echo ""
-echo -e "    ${BLUE}${BOLD}${SETUP_URL}${NC}"
+echo -e "    ${BLUE}${BOLD}http://$(hostname -I | awk '{print $1}'):${DEFAULT_PORT}${NC}"
 echo ""
-echo "  The setup wizard is only accessible from this machine."
-echo "  After setup, rsyslox will be available on your network."
+echo "  The setup wizard is reachable from any machine on your network."
+echo "  Once setup is complete, rsyslox will require authentication."
 echo ""
 echo "  Useful commands:"
 echo "    systemctl status rsyslox          # Service status"
