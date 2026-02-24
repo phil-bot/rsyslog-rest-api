@@ -4,9 +4,9 @@ Thank you for contributing to rsyslox!
 
 ## Getting Started
 
-1. Fork the repository
-2. Clone your fork
-3. Create a feature branch
+1. Fork the repository on GitHub
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/rsyslox.git`
+3. Create a feature branch: `git checkout -b feature/your-feature`
 4. Make your changes
 5. Submit a pull request
 
@@ -15,136 +15,100 @@ Thank you for contributing to rsyslox!
 ### Prerequisites
 
 - Go 1.21+
-- MySQL/MariaDB  
-- rsyslog with MySQL support
-- Docker (for testing)
-- git
+- Node.js 18+
+- MySQL/MariaDB or Docker
 - make
 
-### Clone Repository
+### Running Locally
 
+**Backend:**
 ```bash
-git clone https://github.com/YOUR_USERNAME/rsyslox.git
-cd rsyslox
+cp config.dev.toml.example config.dev.toml
+# Edit config.dev.toml — fill in database credentials
+
+RSYSLOX_CONFIG=./config.dev.toml go run .
+# or: make dev
 ```
 
-### Install Dependencies
-
+**Frontend (in a second terminal):**
 ```bash
-go mod download
-go mod verify
+cd frontend
+npm install
+npm run dev
+# Vite dev server starts at http://localhost:5173
+# Proxies API requests to localhost:8000
 ```
 
-### Build
-
+**Build:**
 ```bash
-# Development build
-make build
-
-# Static build (production)
-make build-static
-
-# Verify
-./build/rsyslox --version
+make all          # frontend + Redoc + Go binary
+make build        # Go binary only (requires frontend/dist to exist)
+make build-static # Static binary for production
 ```
 
-## Development Workflow
+### Docker (Optional)
 
-### 1. Create Feature Branch
+A Docker test environment with MariaDB and live log generation is available — see [Docker Testing Environment](docker.md).
 
-```bash
-git checkout -b feature/awesome-feature
-```
-
-Branch naming conventions:
-- `feature/` - New features
-- `fix/` - Bug fixes
-- `docs/` - Documentation changes
-- `refactor/` - Code refactoring
-- `test/` - Test additions or fixes
-
-### 2. Make Changes
-
-#### Code Style
-
-- Follow Go best practices
-- Run `go fmt ./...` before committing
-- Run `go vet ./...` to catch common errors
-- Use meaningful variable names
-- Add comments for complex logic
-
-#### Project Structure
+## Project Structure
 
 ```
 rsyslox/
-├── cmd/                    # Command-line interface
-├── internal/               # Internal packages
-│   ├── config/            # Configuration handling
-│   ├── database/          # Database operations
-│   ├── handlers/          # HTTP handlers
-│   ├── middleware/        # HTTP middleware
-│   └── models/            # Data models
-├── docker/                # Docker test environment
-├── docs/                  # Documentation
-├── main.go                # Application entry point
-├── go.mod                 # Go modules
-├── Makefile               # Build automation
-└── rsyslox.service        # systemd service file
+├── main.go                     # Entry point, CLI commands
+├── embed.go                    # go:embed directives for frontend/dist and docs/api-ui
+├── internal/
+│   ├── auth/                   # Session token + API key verification
+│   ├── cleanup/                # Disk-based log retention goroutine
+│   ├── config/                 # TOML config load/save/validate, AES-GCM encryption
+│   ├── database/               # MySQL connection, query helpers
+│   └── server/                 # HTTP server, routing, handlers
+├── frontend/
+│   ├── src/
+│   │   ├── api/                # API client (fetch wrappers)
+│   │   ├── components/         # Vue components (AppHeader, LogTable, FilterPanel, …)
+│   │   ├── composables/        # useLocale (i18n)
+│   │   ├── i18n/               # en.json, de.json translation files
+│   │   ├── router/             # Vue Router
+│   │   ├── stores/             # Plain reactive stores: logs.js, auth.js, preferences.js
+│   │   └── views/              # Page-level components: LogsView, AdminView
+│   ├── package.json
+│   └── vite.config.js
+├── docs/                       # Docsify documentation (served via GitHub Pages)
+├── docker/                     # Docker test environment
+├── scripts/
+│   └── install.sh              # Installer script
+├── Makefile
+└── rsyslox.service             # systemd unit file template
 ```
 
-### 3. Testing
+## Frontend Architecture
 
-#### Unit Tests
+The frontend uses Vue 3 Composition API with plain reactive stores (no Pinia).
 
-```bash
-# Run all tests
-go test ./...
+**Stores:**
+- `stores/logs.js` — central log state, filter refs, watch-based reactivity, fetchLogs()
+- `stores/auth.js` — session token in sessionStorage
+- `stores/preferences.js` — language, timeFormat, fontSize, autoRefreshInterval in localStorage
 
-# Run with coverage
-go test -cover ./...
+**i18n:**
+```javascript
+import { useLocale } from '@/composables/useLocale'
+const { t, fmtNumber } = useLocale()
 
-# Run specific package
-go test ./internal/handlers/
+t('filter.severity')              // → "Severity"
+t('logs.showing', { n: 42 })      // → "Showing 42 entries"
+fmtNumber(1234567)                 // → "1,234,567" (EN) or "1.234.567" (DE)
 ```
 
-#### Integration Tests (Docker)
+To add a translation key: add it to both `i18n/en.json` and `i18n/de.json`, then use `t('your.key')`.
 
-```bash
-# Build and test
-make build-static
-cd docker
-docker-compose up -d
+## Coding Standards
 
-# Run manual tests
-curl http://localhost:8000/health
-curl "http://localhost:8000/logs?limit=5"
+- Go: run `go fmt ./...` and `go vet ./...` before committing
+- Vue: keep components focused; use `<script setup>` syntax
+- Commit messages: conventional commits format (see below)
 
-# Cleanup
-docker-compose down -v
-```
-
-### 4. Code Quality
-
-```bash
-# Format code
-go fmt ./...
-
-# Run linter
-go vet ./...
-
-# Static analysis (optional)
-go install honnef.co/go/tools/cmd/staticcheck@latest
-staticcheck ./...
-```
-
-### 5. Commit Changes
-
-```bash
-git add .
-git commit -m "Add awesome feature"
-```
-
-#### Commit Message Format
+## Commit Message Format
 
 ```
 <type>: <subject>
@@ -154,208 +118,80 @@ git commit -m "Add awesome feature"
 <footer>
 ```
 
-**Types:**
-- `feat:` - New features
-- `fix:` - Bug fixes
-- `docs:` - Documentation changes
-- `style:` - Code style changes (formatting, etc.)
-- `refactor:` - Code refactoring
-- `test:` - Test additions or changes
-- `chore:` - Build process or auxiliary tool changes
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 **Examples:**
 ```
-feat: add support for PostgreSQL
+feat: add Facility filter to log viewer
 
-Implement PostgreSQL driver alongside existing MySQL support.
-Users can now choose between MySQL and PostgreSQL backends.
-
-Closes #123
+Adds multi-select facility filter pills to FilterPanel,
+wired to the existing facility filter in logs.js store.
 ```
 
 ```
-fix: handle null values in Message field
+fix: handle null SysLogTag in meta query
 
-Previously null messages caused panic. Now properly handled
-with empty string fallback.
+NULL values caused a panic in the distinct-value aggregation.
+Filtered out with WHERE SysLogTag IS NOT NULL.
 
-Fixes #456
+Fixes #42
 ```
 
-### 6. Push & Pull Request
+## Branch Naming
+
+```
+feature/your-feature-name
+fix/short-description
+docs/what-you-are-documenting
+refactor/what-you-are-refactoring
+```
+
+## Tests
 
 ```bash
-git push origin feature/awesome-feature
+# Run all Go tests
+go test ./...
+
+# With coverage
+go test -cover ./...
+
+# Specific package
+go test ./internal/config/
 ```
 
-Then create a Pull Request on GitHub:
+## Pull Request Checklist
 
-1. Go to your fork on GitHub
-2. Click "Pull Request"
-3. Select your feature branch
-4. Fill in the PR template
-5. Submit
-
-## Pull Request Guidelines
-
-### PR Checklist
-
-Before submitting a PR, ensure:
-
-- [ ] Code follows Go best practices
-- [ ] All tests pass
-- [ ] New features have tests
-- [ ] Documentation updated
-- [ ] Commit messages are clear
-- [ ] No merge conflicts
-- [ ] Branch is up to date with main
-
-### PR Template
-
-```markdown
-## Description
-Brief description of changes
-
-## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
-
-## Testing
-How has this been tested?
-
-## Checklist
-- [ ] Code follows project style
-- [ ] Tests added/updated
-- [ ] Documentation updated
-- [ ] No breaking changes (or documented)
-```
-
-## Code Review Process
-
-1. **Automated Checks** - GitHub Actions run tests
-2. **Maintainer Review** - Project maintainers review code
-3. **Feedback** - Address review comments
-4. **Approval** - PR approved by maintainer
-5. **Merge** - PR merged to main branch
-
-## Reporting Bugs
-
-### Bug Report Template
-
-```markdown
-**Environment:**
-- OS: Ubuntu 22.04
-- Go Version: 1.21.5
-- rsyslox Version: v0.2.3
-
-**Expected Behavior:**
-What should happen
-
-**Actual Behavior:**
-What actually happens
-
-**Steps to Reproduce:**
-1. Step one
-2. Step two
-3. ...
-
-**Logs:**
-```
-Relevant log output
-```
-```
-
-### Where to Report
-
-- **Bugs:** [GitHub Issues](https://github.com/phil-bot/rsyslox/issues)
-- **Security:** Email maintainers privately (see README)
-- **Questions:** [GitHub Discussions](https://github.com/phil-bot/rsyslox/discussions)
-
-## Feature Requests
-
-### Before Requesting
-
-1. Check existing issues
-2. Search discussions
-3. Review roadmap
-
-### Feature Request Template
-
-```markdown
-**Problem:**
-What problem does this solve?
-
-**Proposed Solution:**
-How should it work?
-
-**Alternatives:**
-What alternatives have you considered?
-
-**Additional Context:**
-Screenshots, examples, etc.
-```
-
-## Documentation
-
-### Writing Docs
-
-- Use clear, concise language
-- Include code examples
-- Add screenshots where helpful
-- Test all commands/examples
-- Follow existing structure
-
-### Documentation Structure
-
-```
-docs/
-├── getting-started/       # Installation, configuration
-├── api/                   # API reference, examples
-├── guides/                # Deployment, security, etc.
-└── development/           # Docker, contributing
-```
+- [ ] `go fmt ./...` and `go vet ./...` pass
+- [ ] All Go tests pass: `go test ./...`
+- [ ] Frontend builds without errors: `cd frontend && npm run build`
+- [ ] New translation keys added to both `en.json` and `de.json`
+- [ ] Changelog entry added to `docs/development/changelog.md` under `[Unreleased]`
+- [ ] Documentation updated if behaviour changed
 
 ## Release Process
 
 For maintainers:
 
-1. Update version in code
-2. Update CHANGELOG.md
-3. Create git tag: `git tag -a v0.X.X -m "Release v0.X.X"`
-4. Push tag: `git push origin v0.X.X`
-5. GitHub Actions builds and publishes release
+1. Move `[Unreleased]` entries to a new version section in `changelog.md`
+2. Create and push a git tag: `git tag -a v0.X.Y -m "Release v0.X.Y" && git push origin v0.X.Y`
+3. GitHub Actions builds amd64/arm64 binaries, creates an offline package, and publishes the release with SHA-256 checksums automatically
 
-## Community Guidelines
+Pre-releases are detected automatically from the tag name (e.g. `v0.5.0-beta`).
 
-### Code of Conduct
+## Reporting Bugs
 
-- Be respectful and inclusive
-- Welcome newcomers
-- Focus on constructive feedback
-- Assume good intentions
-- Report violations to maintainers
+Use [GitHub Issues](https://github.com/phil-bot/rsyslox/issues). Include:
 
-### Getting Help
+- rsyslox version (`/health` endpoint → `version` field)
+- OS and architecture
+- Steps to reproduce
+- Relevant log output: `sudo journalctl -u rsyslox -n 100`
 
-- **Documentation:** Read the docs first
-- **Discussions:** Ask questions in GitHub Discussions
-- **Issues:** Report bugs via GitHub Issues
-- **Discord:** Join our community (if available)
+## Feature Requests
 
-## Recognition
-
-Contributors will be:
-- Listed in CONTRIBUTORS.md
-- Mentioned in release notes
-- Credited in documentation
+Open a [GitHub Discussion](https://github.com/phil-bot/rsyslox/discussions) first to discuss the proposal before submitting a PR for larger features.
 
 ## Questions?
 
-- **GitHub Discussions:** https://github.com/phil-bot/rsyslox/discussions
-- **Issues:** https://github.com/phil-bot/rsyslox/issues
-
-## Thank You!
-
-Every contribution helps make rsyslox better for everyone! 🎉
+- [GitHub Discussions](https://github.com/phil-bot/rsyslox/discussions)
+- [GitHub Issues](https://github.com/phil-bot/rsyslox/issues)

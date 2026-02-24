@@ -5,16 +5,15 @@ import (
 	"time"
 )
 
+// Severity and Facility label maps (RFC 5424).
+var SeverityLabels = [8]string{"Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Info", "Debug"}
+var FacilityLabels = [24]string{
+	"kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news",
+	"uucp", "cron", "authpriv", "ftp", "ntp", "audit", "alert", "clock",
+	"local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7",
+}
+
 // LogEntry represents a single log entry from the SystemEvents table.
-//
-// Priority/Severity handling:
-// Older rsyslog versions (< 8.2204.0) stored the Severity (0-7) in the
-// Priority column. Newer versions store the RFC PRI value (Facility*8 + Severity).
-// ScanFromRows detects the format per row and always exposes:
-//   - Priority: RFC PRI value (Facility*8 + Severity)
-//   - Severity: RFC Severity value (0-7)
-//   - Severity_Label: human-readable severity label
-//   - Facility / Facility_Label: unchanged
 type LogEntry struct {
 	ID                 int        `json:"ID"`
 	CustomerID         *int64     `json:"CustomerID"`
@@ -46,111 +45,41 @@ type LogEntry struct {
 }
 
 // ScanFromRows scans a database row into a LogEntry.
-//
-// The raw Priority column value is inspected per row to determine the storage format:
-//   - rawPriority > 7  → modern format: Priority = PRI, Severity = Priority % 8
-//   - rawPriority <= 7 → legacy format: Severity = Priority, Priority = Facility*8 + Severity
-//
-// This handles mixed datasets (after a rsyslog version upgrade) correctly.
+// Handles both legacy (Priority = Severity 0-7) and modern
+// (Priority = Facility*8 + Severity) rsyslog formats.
 func (e *LogEntry) ScanFromRows(rows *sql.Rows) error {
-	var customerID, ntSeverity, importance, eventCategory, eventID sql.NullInt64
-	var maxAvail, currUsage, minUsage, maxUsage, infoUnitID, systemID sql.NullInt64
-	var deviceTime sql.NullTime
-	var eventSource, eventUser, eventBinary, sysLogTag, eventLogType, genericFile sql.NullString
-
 	var rawPriority int
-
 	err := rows.Scan(
-		&e.ID, &customerID, &e.ReceivedAt, &deviceTime,
-		&e.Facility, &rawPriority, &e.FromHost, &e.Message,
-		&ntSeverity, &importance, &eventSource, &eventUser,
-		&eventCategory, &eventID, &eventBinary, &maxAvail, &currUsage,
-		&minUsage, &maxUsage, &infoUnitID, &sysLogTag, &eventLogType,
-		&genericFile, &systemID,
+		&e.ID, &e.CustomerID, &e.ReceivedAt, &e.DeviceReportedTime,
+		&e.Facility, &rawPriority,
+		&e.FromHost, &e.Message, &e.NTSeverity, &e.Importance,
+		&e.EventSource, &e.EventUser, &e.EventCategory, &e.EventID,
+		&e.EventBinaryData, &e.MaxAvailable, &e.CurrUsage,
+		&e.MinUsage, &e.MaxUsage, &e.InfoUnitID, &e.SysLogTag,
+		&e.EventLogType, &e.GenericFileName, &e.SystemID,
 	)
 	if err != nil {
 		return err
 	}
 
-	// Per-row format detection: derive RFC-compliant Priority and Severity
+	// Normalize priority format
 	if rawPriority > 7 {
-		// Modern rsyslog (>= 8.2204.0): Priority column already contains RFC PRI
+		// Modern format: PRI = Facility*8 + Severity
 		e.Priority = rawPriority
 		e.Severity = rawPriority % 8
+		e.Facility = rawPriority / 8
 	} else {
-		// Legacy rsyslog (< 8.2204.0): Priority column contains Severity (0-7)
+		// Legacy format: Priority column stores Severity (0-7) directly
 		e.Severity = rawPriority
 		e.Priority = e.Facility*8 + rawPriority
 	}
 
-	// RFC labels
-	e.SeverityLabel = GetSeverityLabel(e.Severity)
-	e.FacilityLabel = GetFacilityLabel(e.Facility)
-
-	// Map nullable fields
-	if customerID.Valid {
-		e.CustomerID = &customerID.Int64
+	// Set labels
+	if e.Severity >= 0 && e.Severity < 8 {
+		e.SeverityLabel = SeverityLabels[e.Severity]
 	}
-	if deviceTime.Valid {
-		e.DeviceReportedTime = &deviceTime.Time
-	}
-	if ntSeverity.Valid {
-		val := int(ntSeverity.Int64)
-		e.NTSeverity = &val
-	}
-	if importance.Valid {
-		val := int(importance.Int64)
-		e.Importance = &val
-	}
-	if eventSource.Valid {
-		e.EventSource = &eventSource.String
-	}
-	if eventUser.Valid {
-		e.EventUser = &eventUser.String
-	}
-	if eventCategory.Valid {
-		val := int(eventCategory.Int64)
-		e.EventCategory = &val
-	}
-	if eventID.Valid {
-		val := int(eventID.Int64)
-		e.EventID = &val
-	}
-	if eventBinary.Valid {
-		e.EventBinaryData = &eventBinary.String
-	}
-	if maxAvail.Valid {
-		val := int(maxAvail.Int64)
-		e.MaxAvailable = &val
-	}
-	if currUsage.Valid {
-		val := int(currUsage.Int64)
-		e.CurrUsage = &val
-	}
-	if minUsage.Valid {
-		val := int(minUsage.Int64)
-		e.MinUsage = &val
-	}
-	if maxUsage.Valid {
-		val := int(maxUsage.Int64)
-		e.MaxUsage = &val
-	}
-	if infoUnitID.Valid {
-		val := int(infoUnitID.Int64)
-		e.InfoUnitID = &val
-	}
-	if sysLogTag.Valid {
-		e.SysLogTag = &sysLogTag.String
-	}
-	if eventLogType.Valid {
-		e.EventLogType = &eventLogType.String
-	}
-	if genericFile.Valid {
-		e.GenericFileName = &genericFile.String
-	}
-	if systemID.Valid {
-		val := int(systemID.Int64)
-		e.SystemID = &val
+	if e.Facility >= 0 && e.Facility < 24 {
+		e.FacilityLabel = FacilityLabels[e.Facility]
 	}
 
 	return nil

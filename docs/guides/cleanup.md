@@ -4,135 +4,94 @@ Automatic deletion of old log entries to prevent disk overflow.
 
 ## Overview
 
-The cleanup service monitors the disk usage of a configured path (e.g. `/var/lib/mysql`) and automatically deletes the oldest entries from the `SystemEvents` table when usage exceeds a configurable threshold.
-
-This prevents the operating system from crashing due to a full disk while keeping the database operational at all times — without requiring manual intervention or fixed retention periods.
+The cleanup service monitors disk usage at a configured path and automatically deletes the oldest entries from `SystemEvents` when usage exceeds a threshold. This prevents disk-full crashes without requiring fixed retention periods or manual intervention.
 
 ## How It Works
 
-1. Every `CLEANUP_INTERVAL` (default: `15m`) the service checks the current disk usage of `CLEANUP_DISK_PATH`.
-2. If usage exceeds `CLEANUP_THRESHOLD_PERCENT` (default: `85`), a cleanup run is triggered.
-3. The `CLEANUP_BATCH_SIZE` oldest records (ordered by `ReceivedAt ASC`) are deleted.
-4. The result is logged and the process repeats on the next interval tick.
-
 ```
-Every CLEANUP_INTERVAL
-        │
-        ▼
-  Disk usage > CLEANUP_THRESHOLD_PERCENT?
-        │                   │
-       No                  Yes
-        │                   │
-      Skip        Delete CLEANUP_BATCH_SIZE oldest records
-                            │
-                            ▼
-                       Log result
+Every <interval>
+       │
+       ▼
+ Disk usage > threshold?
+       │             │
+      No            Yes
+       │             │
+     Skip   Delete <batch_size> oldest records (ordered by ReceivedAt ASC)
+                     │
+                     ▼
+                Log result, repeat next tick
 ```
 
 ## Configuration
 
-Enable and configure the cleanup service in your `.env` file:
+Configure via **Admin panel → Cleanup**. Changes take effect immediately — no restart needed.
+
+| Setting | Description | Default |
+|---|---|---|
+| Enabled | Toggle the cleanup service | off |
+| Disk path | Mount point to monitor | `/var/lib/mysql` |
+| Threshold % | Trigger cleanup above this disk usage | 85 % |
+| Batch size | Rows deleted per cleanup run | 1 000 |
+| Interval | Seconds between checks | 900 |
+
+### Disk Path
+
+This must be the **mount point of the partition** where MySQL/MariaDB stores its data files:
 
 ```bash
-# Enable the cleanup service
-CLEANUP_ENABLED=true
-
-# Filesystem path to monitor
-CLEANUP_DISK_PATH=/var/lib/mysql
-
-# Disk usage threshold in percent
-CLEANUP_THRESHOLD_PERCENT=85
-
-# Records to delete per cleanup run
-CLEANUP_BATCH_SIZE=1000
-
-# Check interval (Go duration format)
-CLEANUP_INTERVAL=15m
-```
-
-### Parameters
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CLEANUP_ENABLED` | `false` | Enables or disables the service |
-| `CLEANUP_DISK_PATH` | `/var/lib/mysql` | Filesystem path/mount point to monitor |
-| `CLEANUP_THRESHOLD_PERCENT` | `85` | Max allowed disk usage in percent (1–99) |
-| `CLEANUP_BATCH_SIZE` | `1000` | Number of records deleted per run |
-| `CLEANUP_INTERVAL` | `15m` | Check interval (e.g. `5m`, `15m`, `1h`) |
-
-### CLEANUP_DISK_PATH
-
-This must point to the **mount point of the partition** where MySQL/MariaDB stores its data files.
-
-```bash
-# Find the correct path
+# Find the correct value
 df -h /var/lib/mysql
 
 # Example output:
 # Filesystem   Size  Used Avail Use% Mounted on
 # /dev/sdb1     50G   40G   10G  80% /var/lib/mysql
 #
-# → Use: CLEANUP_DISK_PATH=/var/lib/mysql
+# → Use: /var/lib/mysql
 ```
 
-If MySQL data is stored on the root partition:
-
-```bash
-CLEANUP_DISK_PATH=/
+If MySQL data is on the root partition:
+```
+/
 ```
 
-### CLEANUP_THRESHOLD_PERCENT
+### Threshold Percent
 
 Choose a value that gives enough headroom before the disk fills completely.
 
-```bash
-# React early — recommended for production
-CLEANUP_THRESHOLD_PERCENT=80
-
-# Default — balanced
-CLEANUP_THRESHOLD_PERCENT=85
-
-# More permissive — keeps more history
-CLEANUP_THRESHOLD_PERCENT=90
+```
+80 % — react early, recommended for production
+85 % — default, balanced
+90 % — more permissive, keeps more history
 ```
 
-!> **Important:** Do not set this too close to `100`. MySQL needs free space for transaction logs and temporary files.
+!> Do not set this close to `100`. MySQL needs free space for transaction logs and temp files.
 
-### CLEANUP_BATCH_SIZE
+### Batch Size
 
-Controls how many records are removed per cleanup run.
-
-```bash
-# Low volume — delete slowly, keep more history
-CLEANUP_BATCH_SIZE=500
-
-# Default — balanced
-CLEANUP_BATCH_SIZE=1000
-
-# High volume — free space quickly
-CLEANUP_BATCH_SIZE=5000
+```
+500   — low volume, delete slowly
+1000  — default
+5000  — high volume, free space quickly
 ```
 
-Larger values free up space faster but create more database load per cycle.
+Larger values free space faster but create more database load per cycle.
 
-### CLEANUP_INTERVAL
+### Interval
 
-How often the disk is checked. Uses [Go duration format](https://pkg.go.dev/time#ParseDuration).
+How often the disk is checked (in seconds). Examples: `300` (5 min), `900` (15 min, default), `3600` (1 h).
 
-```bash
-# High volume systems
-CLEANUP_INTERVAL=5m
+## Database Permissions
 
-# Default
-CLEANUP_INTERVAL=15m
+The cleanup service needs `DELETE` on `SystemEvents`. If you use a read-only database user, grant `DELETE` as well:
 
-# Low volume systems
-CLEANUP_INTERVAL=1h
+```sql
+GRANT DELETE ON Syslog.SystemEvents TO 'rsyslox'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
 ## Log Output
 
-When the cleanup service is active, you will see entries like:
+When active, the service logs to systemd journal:
 
 ```
 ✓ Cleanup service started (threshold: 85.0%, interval: 15m0s, batch: 1000)
@@ -142,121 +101,87 @@ Cleanup: disk usage at 86.1% (threshold: 85.0%)
 ✓ Cleanup: deleted 1000 records
 ```
 
-If the service is disabled:
-
-```
-⏭  Cleanup service disabled
+```bash
+# Watch cleanup messages in real time
+sudo journalctl -u rsyslox -f | grep -i cleanup
 ```
 
 ## Recommended Configurations
 
-### Production (default)
+**Production (default)**
 
-```bash
-CLEANUP_ENABLED=true
-CLEANUP_DISK_PATH=/var/lib/mysql
-CLEANUP_THRESHOLD_PERCENT=85
-CLEANUP_BATCH_SIZE=1000
-CLEANUP_INTERVAL=15m
-```
+| Setting | Value |
+|---|---|
+| Enabled | true |
+| Disk path | `/var/lib/mysql` |
+| Threshold % | 85 |
+| Batch size | 1 000 |
+| Interval | 900 s |
 
-### High Volume Systems
+**High Volume Systems**
 
-```bash
-CLEANUP_ENABLED=true
-CLEANUP_DISK_PATH=/var/lib/mysql
-CLEANUP_THRESHOLD_PERCENT=75
-CLEANUP_BATCH_SIZE=10000
-CLEANUP_INTERVAL=5m
-```
+| Setting | Value |
+|---|---|
+| Threshold % | 75 |
+| Batch size | 10 000 |
+| Interval | 300 s |
 
-### Low Volume / Long Retention
+**Low Volume / Long Retention**
 
-```bash
-CLEANUP_ENABLED=true
-CLEANUP_DISK_PATH=/var/lib/mysql
-CLEANUP_THRESHOLD_PERCENT=90
-CLEANUP_BATCH_SIZE=500
-CLEANUP_INTERVAL=1h
-```
+| Setting | Value |
+|---|---|
+| Threshold % | 90 |
+| Batch size | 500 |
+| Interval | 3 600 s |
 
 ## Monitoring
-
-### Check Disk Usage
 
 ```bash
 # Check the monitored partition
 df -h /var/lib/mysql
 
-# Check table size in MySQL
-mysql -u rsyslog -p Syslog -e "
+# Check table size and row count in MySQL
+mysql -u rsyslox -p Syslog -e "
 SELECT
-    ROUND(((data_length + index_length) / 1024 / 1024), 2) AS 'Size (MB)',
-    table_rows AS 'Rows (approx)'
+  ROUND(((data_length + index_length) / 1024 / 1024), 2) AS 'Size (MB)',
+  table_rows AS 'Rows (approx)'
 FROM information_schema.TABLES
 WHERE table_schema = 'Syslog' AND table_name = 'SystemEvents';
 "
 
-# Check oldest and newest record
-mysql -u rsyslog -p Syslog -e "
-SELECT
-    MIN(ReceivedAt) AS oldest,
-    MAX(ReceivedAt) AS newest,
-    COUNT(*) AS total
+# Oldest and newest record
+mysql -u rsyslox -p Syslog -e "
+SELECT MIN(ReceivedAt) AS oldest, MAX(ReceivedAt) AS newest, COUNT(*) AS total
 FROM SystemEvents;
 "
 ```
 
-### Watch Cleanup in Real Time
-
-```bash
-# Follow service logs and filter cleanup messages
-sudo journalctl -u rsyslox -f | grep -i cleanup
-```
-
 ## Troubleshooting
 
-### Cleanup Not Triggering
+**Cleanup not triggering**
 
+Check actual disk usage — it may genuinely be below the threshold:
 ```bash
-# Verify CLEANUP_ENABLED is exactly "true" (not "1" or "yes")
-grep CLEANUP_ENABLED /opt/rsyslox/.env
-
-# Check actual disk usage
 df -h /var/lib/mysql
-
-# Make sure the path is on the correct partition
-df -h | grep mysql
 ```
 
-### Disk Still Fills Up
+Verify the service is enabled in **Admin → Cleanup**.
 
-If disk usage grows faster than the cleanup can handle, increase the aggressiveness:
+**Disk still fills up**
 
-```bash
-CLEANUP_THRESHOLD_PERCENT=70
-CLEANUP_BATCH_SIZE=5000
-CLEANUP_INTERVAL=5m
+Increase aggressiveness:
+```
+Threshold: 70 %
+Batch size: 5 000
+Interval: 300 s
 ```
 
-### Records Not Being Deleted
+**"Failed to delete records" error**
 
-```
-❌ Cleanup: failed to delete records: ...
-```
-
-If the database user has only `SELECT` permissions (read-only user), the cleanup service needs `DELETE` as well:
-
-```sql
-GRANT DELETE ON Syslog.SystemEvents TO 'rsyslog'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-?> **Note:** If you are using a dedicated read-only API user for security reasons, consider creating a separate cleanup user with only `DELETE` permission, or grant `DELETE` only on `SystemEvents`.
+The database user lacks `DELETE` permission — see [Database Permissions](#database-permissions) above.
 
 ## More Resources
 
-- [Configuration Reference](configuration.md) - All configuration options
-- [Performance Guide](performance.md) - Database optimization
-- [Deployment Guide](deployment.md) - Production setup
-- [Troubleshooting](troubleshooting.md) - General troubleshooting
+- [Configuration Reference](../getting-started/configuration.md)
+- [Performance Guide](performance.md)
+- [Troubleshooting](troubleshooting.md)

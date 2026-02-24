@@ -1,24 +1,26 @@
 [Unit]
-Description=rsyslox - rsyslog REST API
-After=network.target mysql.service
-Wants=mysql.service
+Description=rsyslox — syslog viewer and REST API
+Documentation=https://github.com/phil-bot/rsyslox
+After=network.target mysql.service mariadb.service
+Wants=network.target
 
 [Service]
 Type=simple
-User=root
-Group=root
-WorkingDirectory=/opt/rsyslox
-EnvironmentFile=/opt/rsyslox/.env
+User=rsyslox
+Group=rsyslox
 ExecStart=/opt/rsyslox/rsyslox
 Restart=on-failure
 RestartSec=5s
 
-# Security
+# Security hardening
 NoNewPrivileges=true
-PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/rsyslox
+ReadWritePaths=/etc/rsyslox
+PrivateTmp=true
+
+# Override config path if needed:
+# Environment=RSYSLOX_CONFIG=/etc/rsyslox/config.toml
 
 [Install]
 WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-# Binaries
+# ── Binaries ──────────────────────────────────────────────────────────────────
 build/
 rsyslox
 *.exe
@@ -6,30 +6,44 @@ rsyslox
 *.so
 *.dylib
 
-# Go
+# ── Go ────────────────────────────────────────────────────────────────────────
 *.test
 *.out
 go.work
+go.work.sum
 
-# Environment
+# ── Frontend ──────────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ── API docs (downloaded at build time, not committed) ────────────────────────
+docs/api-ui/redoc.standalone.js
+
+# ── Configuration (never commit credentials) ──────────────────────────────────
 .env
+*.env
+config.toml
+config.dev.toml
+/etc/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Certificates
+# ── Certificates ──────────────────────────────────────────────────────────────
 *.pem
 *.key
 *.crt
 certs/
 
-# Old Files
-*.old.*
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
 
-.rsyslox/
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.old.*
+package/
+SHA256SUMS
+*.tar.gz

@@ -1,191 +1,110 @@
 # Performance Guide
 
-Optimization and tuning for rsyslog REST API.
+## Performance Overview
 
-## Performance Metrics
+Typical response times with 1 M+ log entries:
 
-Typical performance with 1M+ logs:
+| Operation | Response Time |
+|---|---|
+| Health check | < 5 ms |
+| Simple query (limit 10, indexed fields) | 10–50 ms |
+| Complex multi-filter query | 50–200 ms |
+| Metadata query (`/api/meta/{column}`) | 100–500 ms |
 
-| Operation | Response Time | Throughput |
-|-----------|---------------|------------|
-| Health check | <5ms | 10,000+ req/s |
-| Simple query (limit 10) | 10-50ms | 1,000 req/s |
-| Complex filter | 50-200ms | 500 req/s |
-| Aggregation (meta) | 100-500ms | 200 req/s |
+## Database Indexes
 
-## Database Optimization
+rsyslox queries `SystemEvents` on `ReceivedAt`, `FromHost`, `Priority`, and `Facility`. Ensure these indexes exist:
 
-### Indexes
-
-Automatically created:
 ```sql
-CREATE INDEX idx_receivedat ON SystemEvents (ReceivedAt);
-CREATE INDEX idx_host_time ON SystemEvents (FromHost, ReceivedAt);
-CREATE INDEX idx_priority ON SystemEvents (Priority);
-CREATE INDEX idx_facility ON SystemEvents (Facility);
-CREATE INDEX IF NOT EXISTS idx_message USING FULLTEXT (Message);
+CREATE INDEX IF NOT EXISTS idx_receivedat ON SystemEvents(ReceivedAt);
+CREATE INDEX IF NOT EXISTS idx_fromhost   ON SystemEvents(FromHost);
+CREATE INDEX IF NOT EXISTS idx_priority   ON SystemEvents(Priority);
+CREATE INDEX IF NOT EXISTS idx_facility   ON SystemEvents(Facility);
+CREATE INDEX IF NOT EXISTS idx_syslogtag  ON SystemEvents(SysLogTag);
 ```
 
-Additional indexes:
+Check existing indexes:
 ```sql
-CREATE INDEX idx_syslogtag ON SystemEvents (SysLogTag);
-CREATE INDEX idx_host_priority ON SystemEvents (FromHost, Priority);
+SHOW INDEX FROM SystemEvents;
 ```
 
-### Query Optimization
+## Query Optimization
 
+**Fast — uses indexes:**
 ```bash
-# Good: Uses indexes
-?Priority=3&start_date=...&limit=100
-
-# Slow: Full table scan
-?Message=keyword  # Full-text search
-
-# Best: Combine indexed fields
-?FromHost=web01&Priority=3&start_date=...
+?Severity=3&start_date=2026-02-23T00:00:00Z&limit=100
+?FromHost=web01&Severity=3
 ```
 
-### Connection Pool
-
-```go
-// Increase for high traffic
-db.SetMaxOpenConns(50)    // Default: 25
-db.SetMaxIdleConns(10)    // Default: 5
-db.SetConnMaxLifetime(5 * time.Minute)
+**Slower — full-text scan:**
+```bash
+?Message=keyword   # avoids this for large datasets without full-text index
 ```
 
-### MySQL Configuration
+**Best practice:** Combine indexed fields and use narrow time windows.
+
+## MySQL Configuration
+
+For large log volumes, tune `my.cnf`:
 
 ```ini
-# my.cnf optimizations
 [mysqld]
-innodb_buffer_pool_size = 2G
-innodb_log_file_size = 512M
-innodb_flush_log_at_trx_commit = 2
-query_cache_size = 256M
-query_cache_type = 1
-max_connections = 200
+innodb_buffer_pool_size = 2G    # Set to ~70% of RAM if dedicated to MySQL
+innodb_log_file_size    = 512M
+max_connections         = 200
 ```
 
-## API Optimization
+## API Usage Tips
 
-### Pagination
-
+**Pagination — use reasonable page sizes:**
 ```bash
-# Bad: Large results
-?limit=10000  # Slow!
+# Good: paginated
+?limit=100&offset=0
 
-# Good: Reasonable pages
-?limit=100&offset=0  # Fast
-
-# Best: Time-based pagination
-?start_date=...&end_date=...&limit=100
+# Avoid: huge single requests
+?limit=50000   # Only use with show-all mode, sparingly
 ```
 
-### Filtering
-
+**Time windows — narrow reduces scan range significantly:**
 ```bash
-# Fast: Indexed fields
-?Priority=3
-?FromHost=webserver01
-?start_date=...
+# Fast: 1 hour
+?start_date=2026-02-23T09:00:00Z&end_date=2026-02-23T10:00:00Z
 
-# Slower: Full-text search
-?Message=keyword
-
-# Optimize: Combine filters
-?FromHost=web01&Priority=3  # Uses multiple indexes
+# Slow: 30 days (scans entire table)
+?start_date=2026-01-23T00:00:00Z
 ```
 
-## Monitoring
-
-### Application Metrics
-
+**Metadata — safe to cache:**
 ```bash
-# Query performance
-time curl -H "X-API-Key: $KEY" "http://localhost:8000/logs?limit=1000"
-
-# Concurrent requests
-ab -n 1000 -c 100 http://localhost:8000/health
+# Hosts and tags change slowly; cache /api/meta responses for 5–60 minutes
+curl ".../api/meta/FromHost"
 ```
-
-### Database Stats
-
-```sql
--- Slow queries
-SHOW PROCESSLIST;
-
--- Index usage
-SHOW INDEX FROM SystemEvents;
-
--- Table size
-SELECT 
-    table_name,
-    ROUND(((data_length + index_length) / 1024 / 1024), 2) AS "Size (MB)"
-FROM information_schema.TABLES
-WHERE table_schema = "Syslog";
-```
-
-## Scaling
-
-### Vertical Scaling
-
-1. **CPU:** More cores for concurrent queries
-2. **RAM:** Larger buffer pool for MySQL
-3. **Storage:** SSD for faster I/O
-
-### Horizontal Scaling
-
-```
-Load Balancer (nginx)
-├── API Instance 1
-├── API Instance 2
-└── API Instance 3
-     ↓
-MySQL Master/Slave Replication
-```
-
-See [Deployment Guide](deployment.md#scaling) for details.
 
 ## Benchmarking
-
-### ApacheBench
-
-```bash
-# Health endpoint
-ab -n 10000 -c 100 http://localhost:8000/health
-
-# API endpoint
-ab -n 1000 -c 10 \
-   -H "X-API-Key: $KEY" \
-   "http://localhost:8000/logs?limit=10"
-```
-
-### wrk
 
 ```bash
 # Install wrk
 sudo apt-get install wrk
 
-# Benchmark
-wrk -t4 -c100 -d30s \
-    -H "X-API-Key: $KEY" \
-    http://localhost:8000/logs?limit=10
+# Benchmark health endpoint
+wrk -t4 -c100 -d30s http://localhost:8000/health
+
+# Benchmark log endpoint
+wrk -t4 -c50 -d30s \
+    -H "X-API-Key: $API_KEY" \
+    "http://localhost:8000/api/logs?limit=10"
 ```
 
-## Troubleshooting Performance
+## Scaling
 
-**Slow queries:**
-- Check database indexes
-- Reduce time window
-- Use smaller limits
+**Vertical:** More RAM for MySQL buffer pool, SSD for fast I/O — most effective for read-heavy syslog workloads.
 
-**High memory usage:**
-- Reduce connection pool size
-- Lower result limits
-- Optimize MySQL buffer pool
+**Horizontal:** rsyslox is stateless — run multiple instances behind a load balancer pointing to the same MySQL read replica.
 
-**High CPU:**
-- Enable query cache
-- Add more indexes
-- Scale horizontally
+## Troubleshooting
+
+**Slow meta queries:** Run `ANALYZE TABLE SystemEvents` to refresh statistics.
+
+**High memory usage:** Check `innodb_buffer_pool_size` and reduce if MySQL is sharing the machine.
+
+**Timeouts under load:** Reduce connection pool pressure by limiting concurrent API consumers.

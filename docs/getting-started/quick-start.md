@@ -1,174 +1,85 @@
 # Quick Start
 
-Get up and running with rsyslog REST API in 5 minutes!
+Get up and running with rsyslox in under 5 minutes.
 
 ## Prerequisites
 
-- rsyslog REST API installed
-- rsyslog configured with MySQL
-- MySQL/MariaDB running
+- rsyslox installed and running — see [Installation](installation.md)
+- rsyslog writing to MySQL/MariaDB
 
-If not installed yet: [Installation Guide](installation.md)
+## Step 1: Open the Log Viewer
 
-## Step 1: Start the API
+Navigate to `http://<your-host>:8000` in your browser. The log viewer loads immediately after setup.
 
-```bash
-# Navigate to installation directory
-cd /opt/rsyslog-rest-api
+The left sidebar contains all filter controls:
 
-# Start API (foreground for testing)
-rsyslog-rest-api
-```
+- **Time range** — select a duration (15m / 1h / 6h / 24h / 7d / 30d) or set custom dates
+- **Severity** — click one or more severity levels to filter
+- **Facility**, **Host**, **Tag** — multi-select filter pills
+- **Message search** — free-text search across the message field
 
-You should see:
-```
-Database connection established
-Starting HTTP server on http://0.0.0.0:8000
-```
+## Step 2: Browse Logs
 
-## Step 2: Health Check
+The table shows log entries matching the active filters. Click any row to open the detail panel with the full message and all fields.
 
-Open a new terminal and test:
+**Useful actions:**
 
-```bash
-curl http://localhost:8000/health
-```
+| Action | How |
+|---|---|
+| Select rows | Checkbox on the left |
+| Export selection | Select rows → Export CSV / Export JSON |
+| Toggle auto-refresh | Refresh button in the toolbar (shows countdown) |
+| Navigate pages | Pagination bar at the bottom |
+| Load all entries | Toggle the view mode button in the toolbar |
 
-Response:
-```json
-{
-  "status": "healthy",
-  "database": "connected",
-  "timestamp": "2025-02-15T10:30:00Z"
-}
-```
+## Step 3: Use the API
 
-✅ API is running!
+rsyslox exposes a REST API for external tools. You need a read-only API key — create one in **Admin → API Keys**.
 
-## Step 3: Your First API Call
-
-Get your API key:
+**Get your key, then test it:**
 
 ```bash
-API_KEY=$(grep "^API_KEY=" /opt/rsyslog-rest-api/.env | cut -d'=' -f2)
-echo $API_KEY
+API_KEY="your-key-here"
+curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/logs?limit=5"
 ```
 
-Retrieve latest logs:
+**Retrieve errors from the last hour:**
+
+```bash
+START=$(date -u -d "1 hour ago" "+%Y-%m-%dT%H:%M:%SZ")
+curl -H "X-API-Key: $API_KEY" \
+  "http://localhost:8000/api/logs?Severity=3&start_date=$START"
+```
+
+**Filter by multiple hosts:**
 
 ```bash
 curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?limit=5"
+  "http://localhost:8000/api/logs?FromHost=web01&FromHost=web02"
 ```
 
-## Step 4: Try Filters
+## Step 4: Explore the API Docs
 
-### Filter by Priority
+Interactive API documentation is available at:
 
-Get only errors:
-
-```bash
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?Priority=3&limit=10"
+```
+http://<your-host>:8000/docs
 ```
 
-### Filter by Host
+It covers all endpoints, parameters, and response formats.
 
-Logs from specific server:
+## Admin Panel
 
-```bash
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?FromHost=webserver01&limit=10"
-```
+Navigate to `http://<your-host>:8000/admin`. Log in with your admin password to manage:
 
-### Multiple Filters (v0.2.3!)
-
-Errors from multiple hosts:
-
-```bash
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?FromHost=web01&FromHost=web02&Priority=3"
-```
-
-## Step 5: Query Metadata
-
-Get all hosts:
-
-```bash
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/meta/FromHost"
-```
-
-Get all priorities:
-
-```bash
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/meta/Priority"
-```
-
-## Common Use Cases
-
-### Last Hour Errors
-
-```bash
-START=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?Priority=3&start_date=$START"
-```
-
-### Search for Keyword
-
-```bash
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?Message=login"
-```
-
-### Pagination
-
-```bash
-# First page
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?limit=10&offset=0"
-
-# Second page
-curl -H "X-API-Key: $API_KEY" \
-  "http://localhost:8000/logs?limit=10&offset=10"
-```
-
-## Production Setup
-
-Ready for production?
-
-```bash
-# Stop foreground process (Ctrl+C)
-
-# Install systemd service
-sudo cp rsyslog-rest-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now rsyslog-rest-api
-
-# Check status
-sudo systemctl status rsyslog-rest-api
-```
+- Server settings and SSL
+- Log cleanup configuration
+- API key creation and revocation
+- Browser preferences (language, font size, time format, auto-refresh interval)
 
 ## Next Steps
 
 - [Full API Reference](../api/reference.md)
-- [More Examples](../api/examples.md)
+- [API Examples](../api/examples.md)
 - [Deploy to Production](../guides/deployment.md)
-
-## Troubleshooting
-
-**API won't start:**
-- Check logs: `sudo journalctl -u rsyslog-rest-api -n 50`
-- Verify database: `mysql -u rsyslog -p Syslog`
-
-**No logs returned:**
-- Check database has data: `mysql -u rsyslog -p Syslog -e "SELECT COUNT(*) FROM SystemEvents"`
-- Try without filters first
-
-**Authentication failed:**
-- Verify API key: `grep API_KEY /opt/rsyslog-rest-api/.env`
-- Check header format: `X-API-Key: your-key`
-
-More help: [Troubleshooting Guide](../guides/troubleshooting.md)
+- [Troubleshooting](../guides/troubleshooting.md)

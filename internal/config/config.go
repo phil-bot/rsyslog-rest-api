@@ -1,270 +1,146 @@
+// Package config handles loading, saving and validating application configuration.
+// Configuration is stored in TOML format at /etc/rsyslox/config.toml.
+// During local development, an alternative path can be specified via the
+// RSYSLOX_CONFIG environment variable.
 package config
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
-// Config holds all application configuration
-type Config struct {
-	// Database
-	DBHost             string
-	DBName             string
-	DBUser             string
-	DBPass             string
-	DBConnectionString string // NEW: Optional full connection string
+const (
+	// DefaultConfigPath is the standard production config location.
+	DefaultConfigPath = "/etc/rsyslox/config.toml"
 
-	// Server
-	ServerHost string
-	ServerPort string
+	// EnvConfigPath overrides the config file path (for development).
+	EnvConfigPath = "RSYSLOX_CONFIG"
+)
 
-	// Security
-	APIKey      string
-	UseSSL      bool
-	SSLCertFile string
-	SSLKeyFile  string
+// Load reads the configuration from disk.
+// Returns (cfg, false, nil)  when the config file exists and is valid.
+// Returns (defaults, true, nil) when the config file does not exist yet
+// (first-run / setup-wizard mode).
+// Returns (nil, false, err) on any other error.
+func Load() (*Config, bool, error) {
+	path := configPath()
 
-	// CORS
-	AllowedOrigins []string
+	cfg := defaults()
+	cfg.ConfigPath = path
+	cfg.InstallPath = installPath()
 
-	// Paths
-	InstallPath     string
-	RsyslogConfPath string
-
-	// Cleanup
-	CleanupEnabled           bool
-	CleanupDiskPath          string
-	CleanupThresholdPercent  float64
-	CleanupBatchSize         int
-	CleanupInterval          time.Duration
-}
-
-// Load loads configuration from environment variables
-func Load() (*Config, error) {
-	execPath, err := os.Executable()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get executable path: %v", err)
-	}
-	installPath := filepath.Dir(execPath)
-
-	cfg := &Config{
-		ServerHost:      getEnv("SERVER_HOST", "0.0.0.0"),
-		ServerPort:      getEnv("SERVER_PORT", "8000"),
-		APIKey:          getEnv("API_KEY", ""),
-		UseSSL:          getEnv("USE_SSL", "false") == "true",
-		SSLCertFile:     getEnv("SSL_CERTFILE", filepath.Join(installPath, "certs", "cert.pem")),
-		SSLKeyFile:      getEnv("SSL_KEYFILE", filepath.Join(installPath, "certs", "key.pem")),
-		RsyslogConfPath: getEnv("RSYSLOG_CONFIG_PATH", "/etc/rsyslog.d/mysql.conf"),
-		InstallPath:     installPath,
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// No config file → setup wizard needed
+		return cfg, true, nil
 	}
 
-	// Parse CORS origins
-	originsStr := getEnv("ALLOWED_ORIGINS", "*")
-	cfg.AllowedOrigins = strings.Split(originsStr, ",")
-	for i := range cfg.AllowedOrigins {
-		cfg.AllowedOrigins[i] = strings.TrimSpace(cfg.AllowedOrigins[i])
+	if _, err := toml.DecodeFile(path, cfg); err != nil {
+		return nil, false, fmt.Errorf("failed to parse config file %s: %w", path, err)
 	}
 
-	// Database configuration - multiple options
-	if err := cfg.loadDatabaseConfig(); err != nil {
-		return nil, err
-	}
-
-	// Cleanup configuration
-	cfg.loadCleanupConfig()
-
-	// Validate configuration
 	if err := cfg.Validate(); err != nil {
-		return nil, err
+		return nil, false, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	cfg.logConfiguration()
-	return cfg, nil
+	return cfg, false, nil
 }
 
-// loadCleanupConfig loads the cleanup/housekeeping configuration.
-func (c *Config) loadCleanupConfig() {
-	c.CleanupEnabled = getEnv("CLEANUP_ENABLED", "false") == "true"
-	c.CleanupDiskPath = getEnv("CLEANUP_DISK_PATH", "/var/lib/mysql")
-
-	threshold := getEnvFloat("CLEANUP_THRESHOLD_PERCENT", 85.0)
-	if threshold <= 0 || threshold > 100 {
-		log.Printf("⚠️  CLEANUP_THRESHOLD_PERCENT out of range (%.1f), using default 85%%", threshold)
-		threshold = 85.0
-	}
-	c.CleanupThresholdPercent = threshold
-
-	batchSize := getEnvInt("CLEANUP_BATCH_SIZE", 1000)
-	if batchSize <= 0 {
-		log.Printf("⚠️  CLEANUP_BATCH_SIZE must be positive, using default 1000")
-		batchSize = 1000
-	}
-	c.CleanupBatchSize = batchSize
-
-	intervalStr := getEnv("CLEANUP_INTERVAL", "15m")
-	interval, err := time.ParseDuration(intervalStr)
-	if err != nil || interval <= 0 {
-		log.Printf("⚠️  CLEANUP_INTERVAL invalid (%q), using default 15m", intervalStr)
-		interval = 15 * time.Minute
-	}
-	c.CleanupInterval = interval
-}
-
-// loadDatabaseConfig loads database configuration with fallback options
-func (c *Config) loadDatabaseConfig() error {
-	// Option 1: Full connection string (NEW in v0.2.3+)
-	connStr := os.Getenv("DB_CONNECTION_STRING")
-	if connStr != "" {
-		c.DBConnectionString = connStr
-		log.Println("Database connection from DB_CONNECTION_STRING")
-		return nil
+// Save writes the configuration to disk.
+// The file is written with mode 0640 (root:rsyslox readable).
+func Save(cfg *Config) error {
+	path := cfg.ConfigPath
+	if path == "" {
+		path = configPath()
 	}
 
-	// Option 2: Individual environment variables (RECOMMENDED)
-	dbHost := os.Getenv("DB_HOST")
-	dbName := os.Getenv("DB_NAME")
-	dbUser := os.Getenv("DB_USER")
-	dbPass := os.Getenv("DB_PASS")
-
-	if dbHost != "" && dbName != "" && dbUser != "" && dbPass != "" {
-		c.DBHost = dbHost
-		c.DBName = dbName
-		c.DBUser = dbUser
-		c.DBPass = dbPass
-		log.Printf("Database connection from environment: %s@%s/%s", dbUser, dbHost, dbName)
-		return nil
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Option 3: Fallback to rsyslog config file
-	log.Println("DB_* environment variables not set, trying rsyslog config file...")
-	dbUser, dbPass, dbName, dbHost, err := ParseRsyslogConfig(c.RsyslogConfPath)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
 	if err != nil {
-		return fmt.Errorf("failed to load database config: %v\n\n"+
-			"Please set one of:\n"+
-			"  1. DB_CONNECTION_STRING=user:pass@tcp(host)/dbname\n"+
-			"  2. DB_HOST, DB_NAME, DB_USER, DB_PASS individually\n"+
-			"  3. Readable rsyslog config at %s", err, c.RsyslogConfPath)
+		return fmt.Errorf("failed to open config file for writing: %w", err)
 	}
+	defer f.Close()
 
-	c.DBUser = dbUser
-	c.DBPass = dbPass
-	c.DBName = dbName
-	c.DBHost = dbHost
-	log.Printf("Database connection from rsyslog config: %s@%s/%s", dbUser, dbHost, dbName)
+	enc := toml.NewEncoder(f)
+	if err := enc.Encode(cfg); err != nil {
+		return fmt.Errorf("failed to encode config: %w", err)
+	}
 
 	return nil
 }
 
-// Validate validates the configuration
+// Validate checks that all required fields are set and values are in range.
 func (c *Config) Validate() error {
-	// Database validation
-	if c.DBConnectionString == "" {
-		if c.DBHost == "" || c.DBName == "" || c.DBUser == "" || c.DBPass == "" {
-			return fmt.Errorf("incomplete database configuration")
-		}
+	if c.Database.Host == "" {
+		return fmt.Errorf("database.host is required")
 	}
-
-	// Server validation
-	if c.ServerPort == "" {
-		return fmt.Errorf("SERVER_PORT cannot be empty")
+	if c.Database.Name == "" {
+		return fmt.Errorf("database.name is required")
 	}
-
-	// SSL validation
-	if c.UseSSL {
-		if _, err := os.Stat(c.SSLCertFile); os.IsNotExist(err) {
-			return fmt.Errorf("SSL certificate not found: %s", c.SSLCertFile)
-		}
-		if _, err := os.Stat(c.SSLKeyFile); os.IsNotExist(err) {
-			return fmt.Errorf("SSL key not found: %s", c.SSLKeyFile)
-		}
+	if c.Database.User == "" {
+		return fmt.Errorf("database.user is required")
 	}
-
+	if c.Database.Password == "" {
+		return fmt.Errorf("database.password is required")
+	}
+	if c.Auth.AdminPasswordHash == "" {
+		return fmt.Errorf("auth.admin_password_hash is required")
+	}
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		return fmt.Errorf("server.port must be between 1 and 65535")
+	}
+	if c.Cleanup.ThresholdPercent <= 0 || c.Cleanup.ThresholdPercent > 100 {
+		return fmt.Errorf("cleanup.threshold_percent must be between 1 and 100")
+	}
 	return nil
 }
 
-// GetDSN returns the MySQL DSN (Data Source Name) for database connection
-func (c *Config) GetDSN() string {
-	if c.DBConnectionString != "" {
-		// Parse and ensure parseTime=true
-		if !strings.Contains(c.DBConnectionString, "parseTime=") {
-			if strings.Contains(c.DBConnectionString, "?") {
-				return c.DBConnectionString + "&parseTime=true&charset=utf8mb4"
-			}
-			return c.DBConnectionString + "?parseTime=true&charset=utf8mb4"
-		}
-		return c.DBConnectionString
-	}
-
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4",
-		c.DBUser, c.DBPass, c.DBHost, c.DBName)
-}
-
-// logConfiguration logs the loaded configuration (without sensitive data)
-func (c *Config) logConfiguration() {
-	log.Println("Configuration loaded:")
-	log.Printf("  Server: %s:%s", c.ServerHost, c.ServerPort)
-	log.Printf("  SSL: %v", c.UseSSL)
-
-	if c.DBConnectionString != "" {
-		log.Printf("  Database: [connection string]")
-	} else {
-		log.Printf("  Database: %s@%s/%s", c.DBUser, c.DBHost, c.DBName)
-	}
-
-	if c.APIKey == "" {
-		log.Println("  ⚠️  WARNING: Running without API key authentication!")
-		log.Println("     Set API_KEY environment variable for production.")
-	} else {
-		log.Printf("  API Key: %s...%s", c.APIKey[:4], c.APIKey[len(c.APIKey)-4:])
-	}
-
-	log.Printf("  CORS Origins: %v", c.AllowedOrigins)
-	log.Printf("  Install Path: %s", c.InstallPath)
-
-	if c.CleanupEnabled {
-		log.Printf("  Cleanup: enabled (disk: %s, threshold: %.1f%%, interval: %s, batch: %d)",
-			c.CleanupDiskPath, c.CleanupThresholdPercent, c.CleanupInterval, c.CleanupBatchSize)
-	} else {
-		log.Printf("  Cleanup: disabled")
-	}
-}
-
-// getEnv gets an environment variable with a default value
-func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
-}
-
-// getEnvFloat gets an environment variable as float64 with a default value
-func getEnvFloat(key string, defaultValue float64) float64 {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	f, err := strconv.ParseFloat(value, 64)
+// DSN builds a MySQL DSN string from the database configuration.
+// The password is decrypted if it has the "enc:" prefix.
+func (c *Config) DSN() (string, error) {
+	pass, err := DecryptPassword(c.Database.Password)
 	if err != nil {
-		return defaultValue
+		return "", fmt.Errorf("failed to decrypt database password: %w", err)
 	}
-	return f
+	port := c.Database.Port
+	if port == 0 {
+		port = 3306
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=Local",
+		c.Database.User, pass, c.Database.Host, port, c.Database.Name), nil
 }
 
-// getEnvInt gets an environment variable as int with a default value
-func getEnvInt(key string, defaultValue int) int {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
+// configPath returns the active configuration file path.
+func configPath() string {
+	if p := os.Getenv(EnvConfigPath); p != "" {
+		return p
 	}
-	i, err := strconv.Atoi(value)
+	return DefaultConfigPath
+}
+
+// installPath returns the directory of the running binary.
+func installPath() string {
+	exe, err := exec.LookPath(os.Args[0])
 	if err != nil {
-		return defaultValue
+		return "/opt/rsyslox"
 	}
-	return i
+	abs, err := filepath.Abs(exe)
+	if err != nil {
+		return "/opt/rsyslox"
+	}
+	return filepath.Dir(abs)
+}
+
+// ActiveConfigPath returns the config file path that is currently in use.
+// Exported so other packages (e.g. the health handler) can check whether
+// the file exists without importing the full config loading logic.
+func ActiveConfigPath() string {
+	return configPath()
 }

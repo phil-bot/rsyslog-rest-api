@@ -1,42 +1,66 @@
-.PHONY: build build-static clean install
+# rsyslox Makefile
 
-# Get version from git tag or use dev
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS = -s -w -X main.Version=$(VERSION)
+BINARY       := rsyslox
+BUILD_DIR    := build
+VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS      := -s -w -X main.Version=$(VERSION)
 
-# Build the application
+FRONTEND_DIR := frontend
+REDOC_JS     := docs/api-ui/redoc.standalone.js
+REDOC_URL    := https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js
+
+.PHONY: all build build-static frontend redoc dev clean test lint install uninstall help
+
+## all: Build everything — frontend + redoc + Go binary
+all: frontend redoc build
+
+## build: Build Go binary (development, requires frontend/dist to exist)
 build:
-	@echo "Building rsyslox ($(VERSION))..."
-	@mkdir -p build
-	@go build -ldflags "$(LDFLAGS)" -o build/rsyslox .
-	@echo "✓ Build complete: ./build/rsyslox"
+	mkdir -p $(BUILD_DIR)
+	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) .
 
-# Build static binary (no libc dependency)
+## build-static: Build fully static Go binary (for Docker / production)
 build-static:
-	@echo "Building static binary ($(VERSION))..."
-	@mkdir -p build
-	@CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o build/rsyslox .
-	@echo "✓ Static build complete: ./build/rsyslox"
+	mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 GOOS=linux go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) .
 
-# Clean build artifacts
+## frontend: Install npm deps and build Vue app into frontend/dist/
+frontend:
+	cd $(FRONTEND_DIR) && npm install && npm run build
+
+## redoc: Download Redoc standalone JS for offline API documentation
+redoc:
+	@echo "Downloading Redoc standalone..."
+	mkdir -p docs/api-ui
+	curl -fsSL $(REDOC_URL) -o $(REDOC_JS)
+	@echo "Redoc downloaded to $(REDOC_JS)"
+
+## dev: Run Go backend for frontend development (uses config.dev.toml)
+dev:
+	RSYSLOX_CONFIG=./config.dev.toml go run .
+
+## test: Run all Go tests
+test:
+	go test ./...
+
+## lint: Run Go static analysis
+lint:
+	go vet ./...
+
+## install: Install rsyslox on this machine (requires sudo)
+install: all
+	sudo scripts/install.sh
+
+## uninstall: Remove rsyslox from this machine (requires sudo)
+uninstall:
+	sudo scripts/install.sh --uninstall
+
+## clean: Remove all build artifacts
 clean:
-	@rm -rf build/
-	@echo "✓ Cleaned"
+	rm -rf $(BUILD_DIR)
+	rm -rf $(FRONTEND_DIR)/dist
+	rm -rf $(FRONTEND_DIR)/node_modules
 
-# Install to /opt/rsyslox
-install: build-static
-	@echo "Installing to /opt/rsyslox..."
-	@sudo mkdir -p /opt/rsyslox
-	@sudo cp build/rsyslox /opt/rsyslox/
-	@sudo chmod +x /opt/rsyslox/rsyslox
-	@[ ! -f /opt/rsyslox/.env ] && sudo cp .env.example /opt/rsyslox/.env || true
-	@sudo cp rsyslox.service /etc/systemd/system/
-	@sudo systemctl daemon-reload
-	@echo "✓ Installed (version: $(VERSION))"
-	@echo ""
-	@echo "IMPORTANT - Configuration required:"
-	@echo "  1. Set database credentials: sudo nano /opt/rsyslox/.env"
-	@echo "     (DB_HOST, DB_NAME, DB_USER, DB_PASS)"
-	@echo "  2. Set API key: API_KEY=\$$(openssl rand -hex 32)"
-	@echo "  3. Secure config: sudo chmod 600 /opt/rsyslox/.env"
-	@echo "  4. Start: sudo systemctl enable --now rsyslox"
+## help: Show available targets
+help:
+	@grep -E '^## ' Makefile | sed 's/## /  /'

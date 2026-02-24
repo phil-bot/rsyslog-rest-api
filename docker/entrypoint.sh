@@ -1,4 +1,11 @@
 #!/bin/bash
+# Docker test environment entrypoint.
+# Sets up MariaDB, seeds test data, then starts rsyslox WITHOUT a config file
+# so the setup wizard runs and can be tested end-to-end.
+#
+# RSYSLOX_ALLOW_REMOTE_SETUP=true (set in docker-compose.yml) allows the
+# wizard to be reached from the Docker host, not just from localhost.
+
 set -e
 
 echo "================================================"
@@ -6,193 +13,123 @@ echo "rsyslox - Test Environment"
 echo "================================================"
 echo ""
 
-# Check if binary exists in mounted directory
+# ── Check binary ─────────────────────────────────────────────────────────────
 if [ ! -f /host-build/rsyslox ]; then
-    echo "✗ ERROR: Binary not found!"
+    echo "✗ ERROR: Binary not found at /host-build/rsyslox"
     echo ""
-    echo "Please build first:"
-    echo "  cd .. && make build-static"
-    echo ""
+    echo "Build first:  make all"
     exit 1
 fi
 
-# Copy binary to installation directory
-echo "[1/9] Installing API binary..."
-cp /host-build/rsyslox /opt/rsyslox/
+echo "[1/5] Installing API binary..."
+cp /host-build/rsyslox /opt/rsyslox/rsyslox
 chmod +x /opt/rsyslox/rsyslox
 echo "✓ Binary installed ($(ls -lh /opt/rsyslox/rsyslox | awk '{print $5}'))"
 
-# Start MariaDB
-echo "[2/9] Starting MariaDB..."
+# ── MariaDB ───────────────────────────────────────────────────────────────────
+echo "[2/5] Starting MariaDB..."
 mysqld_safe --datadir=/var/lib/mysql --user=mysql &
-sleep 5
-
-# Wait for MariaDB
 for i in {1..30}; do
-    if mysqladmin ping --silent 2>/dev/null; then
-        echo "✓ MariaDB ready"
-        break
-    fi
+    mysqladmin ping --silent 2>/dev/null && { echo "✓ MariaDB ready"; break; }
     [ $i -eq 30 ] && echo "✗ MariaDB timeout!" && exit 1
     sleep 1
 done
 
-# Create database and user FIRST
-echo "[3/9] Creating database..."
-mysql <<EOF
-CREATE DATABASE IF NOT EXISTS Syslog;
-CREATE USER IF NOT EXISTS 'rsyslog'@'localhost' IDENTIFIED BY 'password';
-GRANT ALL ON Syslog.* TO 'rsyslog'@'localhost';
+# ── Database + table ─────────────────────────────────────────────────────────
+DB_NAME="${DB_NAME:-Syslog}"
+DB_USER="${DB_USER:-rsyslog}"
+DB_PASS="${DB_PASS:-password}"
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-3306}"
+SERVER_PORT="${SERVER_PORT:-8000}"
+
+echo "[3/5] Creating database, user and table..."
+mysql <<SQL
+CREATE DATABASE IF NOT EXISTS ${DB_NAME};
+CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';
+GRANT ALL ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
-EOF
-echo "✓ Database created"
+SQL
 
-# Create SystemEvents table manually (rsyslog doesn't always create it)
-echo "[4/9] Creating SystemEvents table..."
-mysql Syslog <<'TABLEEOF'
+mysql "${DB_NAME}" <<'SQL'
 CREATE TABLE IF NOT EXISTS SystemEvents (
-    ID int unsigned not null auto_increment primary key,
-    CustomerID bigint,
-    ReceivedAt datetime NULL,
+    ID            int unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    CustomerID    bigint,
+    ReceivedAt    datetime NULL,
     DeviceReportedTime datetime NULL,
-    Facility smallint NULL,
-    Priority smallint NULL,
-    FromHost varchar(60) NULL,
-    Message text,
-    NTSeverity int NULL,
-    Importance int NULL,
-    EventSource varchar(60),
-    EventUser varchar(60) NULL,
+    Facility      smallint NULL,
+    Priority      smallint NULL,
+    FromHost      varchar(60) NULL,
+    Message       text,
+    NTSeverity    int NULL,
+    Importance    int NULL,
+    EventSource   varchar(60),
+    EventUser     varchar(60) NULL,
     EventCategory int NULL,
-    EventID int NULL,
+    EventID       int NULL,
     EventBinaryData text NULL,
-    MaxAvailable int NULL,
-    CurrUsage int NULL,
-    MinUsage int NULL,
-    MaxUsage int NULL,
-    InfoUnitID int NULL,
-    SysLogTag varchar(60),
-    EventLogType varchar(60),
-    GenericFileName VarChar(60),
-    SystemID int NULL
-);
-TABLEEOF
-echo "✓ SystemEvents table created"
+    MaxAvailable  int NULL,
+    CurrUsage     int NULL,
+    MinUsage      int NULL,
+    MaxUsage      int NULL,
+    InfoUnitID    int NULL,
+    SysLogTag     varchar(60),
+    EventLogType  varchar(60),
+    GenericFileName varchar(60),
+    SystemID      int NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SQL
+echo "✓ Database ready"
 
-# Create rsyslog config
-echo "[5/9] Configuring rsyslog..."
-cat > /etc/rsyslog.d/mysql.conf <<'RSYEOF'
-module(load="ommysql")
-action(type="ommysql" server="localhost" db="Syslog" uid="rsyslog" pwd="password")
-RSYEOF
-chmod 600 /etc/rsyslog.d/mysql.conf
-echo "✓ rsyslog configured"
+# ── Seed data ─────────────────────────────────────────────────────────────────
+echo "[4/5] Inserting seed log entries..."
+mysql "${DB_NAME}" <<'SQL'
+INSERT INTO SystemEvents
+  (ReceivedAt,DeviceReportedTime,Facility,Priority,FromHost,Message,SysLogTag,InfoUnitID,SystemID)
+VALUES
+  (NOW()-INTERVAL 10 MINUTE, NOW()-INTERVAL 10 MINUTE, 1, 6,  'webserver01', 'nginx: GET /api/health 200 0.001s',  'nginx',    1, 0),
+  (NOW()-INTERVAL  9 MINUTE, NOW()-INTERVAL  9 MINUTE, 3, 5,  'dbserver01',  'mysqld: InnoDB: Buffer pool loaded', 'mysqld',   1, 0),
+  (NOW()-INTERVAL  8 MINUTE, NOW()-INTERVAL  8 MINUTE, 4, 4,  'webserver02', 'sshd: Failed password for root',     'sshd',     1, 0),
+  (NOW()-INTERVAL  7 MINUTE, NOW()-INTERVAL  7 MINUTE, 1, 3,  'appserver01', 'node: Unhandled exception in worker','node',     1, 0),
+  (NOW()-INTERVAL  6 MINUTE, NOW()-INTERVAL  6 MINUTE, 1, 6,  'webserver01', 'nginx: GET /dashboard 200 0.042s',   'nginx',    1, 0),
+  (NOW()-INTERVAL  5 MINUTE, NOW()-INTERVAL  5 MINUTE, 3, 6,  'dbserver01',  'mysqld: 100 queries in last second', 'mysqld',   1, 0),
+  (NOW()-INTERVAL  4 MINUTE, NOW()-INTERVAL  4 MINUTE, 9, 5,  'mailserver01','postfix: queued for delivery',       'postfix',  1, 0),
+  (NOW()-INTERVAL  3 MINUTE, NOW()-INTERVAL  3 MINUTE, 4, 4,  'firewall01',  'iptables: blocked 192.168.1.99:4444','iptables', 1, 0),
+  (NOW()-INTERVAL  2 MINUTE, NOW()-INTERVAL  2 MINUTE, 1, 3,  'webserver02', 'nginx: upstream timed out (110)',    'nginx',    1, 0),
+  (NOW()-INTERVAL  1 MINUTE, NOW()-INTERVAL  1 MINUTE, 3, 6,  'dbserver01',  'mysqld: ready for connections',      'mysqld',   1, 0);
+SQL
+echo "✓ 10 seed entries inserted"
 
-# Start rsyslog
-echo "[6/9] Starting rsyslog..."
-rsyslogd 2>/dev/null || true
-sleep 2
-echo "✓ rsyslog started"
+# ── Start rsyslox without config → setup wizard ───────────────────────────────
+echo "[5/5] Starting rsyslox in setup wizard mode..."
 
-# Insert initial test data
-echo "[7/9] Inserting initial test data..."
-mysql Syslog <<'DATAEOF'
-INSERT INTO SystemEvents (ReceivedAt, DeviceReportedTime, FromHost, Priority, Facility, Message, SysLogTag) VALUES
-(NOW() - INTERVAL 1 HOUR, NOW() - INTERVAL 1 HOUR, 'webserver01', 6, 1, 'User login successful: admin', 'sshd'),
-(NOW() - INTERVAL 2 HOUR, NOW() - INTERVAL 2 HOUR, 'webserver01', 3, 1, 'Failed login attempt from 192.168.1.100', 'sshd'),
-(NOW() - INTERVAL 3 HOUR, NOW() - INTERVAL 3 HOUR, 'dbserver01', 4, 4, 'Database connection timeout', 'mysqld'),
-(NOW() - INTERVAL 4 HOUR, NOW() - INTERVAL 4 HOUR, 'dbserver01', 6, 4, 'Query executed successfully', 'mysqld'),
-(NOW() - INTERVAL 5 HOUR, NOW() - INTERVAL 5 HOUR, 'appserver01', 5, 16, 'Application started on port 3000', 'node'),
-(NOW() - INTERVAL 6 HOUR, NOW() - INTERVAL 6 HOUR, 'appserver01', 3, 16, 'Critical error in module auth', 'node'),
-(NOW() - INTERVAL 7 HOUR, NOW() - INTERVAL 7 HOUR, 'webserver02', 6, 1, 'HTTP request: GET /api/users', 'nginx'),
-(NOW() - INTERVAL 8 HOUR, NOW() - INTERVAL 8 HOUR, 'webserver02', 4, 1, 'Slow response time detected: 2.5s', 'nginx'),
-(NOW() - INTERVAL 9 HOUR, NOW() - INTERVAL 9 HOUR, 'mailserver01', 2, 3, 'Mail queue growing rapidly', 'postfix'),
-(NOW() - INTERVAL 10 HOUR, NOW() - INTERVAL 10 HOUR, 'mailserver01', 6, 3, 'Email sent successfully', 'postfix');
-DATAEOF
-
-LOGCOUNT=$(mysql -N Syslog -e 'SELECT COUNT(*) FROM SystemEvents')
-echo "✓ Initial data inserted ($LOGCOUNT entries)"
-
-# Configure API
-echo "[8/9] Configuring API..."
-cat > /opt/rsyslox/.env <<ENVEOF
-API_KEY=${API_KEY}
-SERVER_HOST=0.0.0.0
-SERVER_PORT=${SERVER_PORT:-8000}
-USE_SSL=false
-ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
-RSYSLOG_CONFIG_PATH=/etc/rsyslog.d/mysql.conf
-ENVEOF
-
-echo "✓ API configured"
-
-# Start API
-echo "[9/9] Starting API..."
-cd /opt/rsyslox
-./rsyslox > /var/log/rsyslox.log 2>&1 &
+/opt/rsyslox/rsyslox > /var/log/rsyslox.log 2>&1 &
 API_PID=$!
+sleep 2
 
-# Wait for API to start
-sleep 3
-if kill -0 $API_PID 2>/dev/null; then
-    echo "✓ API started (PID: $API_PID)"
-else
-    echo "✗ API failed to start!"
+if ! kill -0 $API_PID 2>/dev/null; then
+    echo "✗ rsyslox failed to start!"
     cat /var/log/rsyslox.log
     exit 1
 fi
-
-# Test API
-if curl -s http://localhost:8000/health > /dev/null; then
-    echo "✓ API health check passed"
-else
-    echo "⚠ API health check failed (may still be starting)"
-fi
-
-# Start live log generator
-echo ""
-echo "Starting live log generator..."
-chmod +x /opt/rsyslox/log-generator.sh
-/opt/rsyslox/log-generator.sh > /var/log/log-generator.log 2>&1 &
-GENERATOR_PID=$!
-sleep 2
-
-if kill -0 $GENERATOR_PID 2>/dev/null; then
-    echo "✓ Live log generator started (PID: $GENERATOR_PID)"
-else
-    echo "⚠ Live log generator failed to start (optional)"
-fi
+echo "✓ rsyslox started (PID: $API_PID)"
 
 echo ""
 echo "================================================"
-echo "✓ Environment Ready!"
+echo "✓ Environment Ready — Setup Wizard"
 echo "================================================"
 echo ""
-echo "API:      http://localhost:8000"
-echo "API Key:  ${API_KEY:-none (no auth)}"
-echo "Database: Syslog (rsyslog/password)"
-echo "Logs:     $LOGCOUNT entries (growing live!)"
+echo "  Open in your browser:"
+echo "  → http://localhost:${SERVER_PORT}"
 echo ""
-echo "Live Logs: New entries every 10 seconds"
-echo "  - Realistic messages from 6 hosts"
-echo "  - Various priorities and tags"
-echo "  - Watch: docker-compose logs -f"
+echo "  Use these database credentials in the wizard:"
+echo "    DB Host:     ${DB_HOST}"
+echo "    DB Port:     ${DB_PORT}"
+echo "    DB Name:     ${DB_NAME}"
+echo "    DB User:     ${DB_USER}"
+echo "    DB Password: ${DB_PASS}"
 echo ""
-echo "Test commands:"
-echo "  curl http://localhost:8000/health"
-if [ -n "${API_KEY}" ]; then
-    echo "  curl -H 'X-API-Key: ${API_KEY}' http://localhost:8000/logs?limit=5"
-    echo "  curl -H 'X-API-Key: ${API_KEY}' http://localhost:8000/meta/FromHost"
-else
-    echo "  curl http://localhost:8000/logs?limit=5"
-    echo "  curl http://localhost:8000/meta/FromHost"
-fi
-echo ""
-echo "Monitor:"
-echo "  API logs:  tail -f /var/log/rsyslox.log"
-echo "  Live logs: tail -f /var/log/log-generator.log"
-echo "  DB count:  docker exec rsyslox-test mysql Syslog -e 'SELECT COUNT(*) FROM SystemEvents'"
+echo "  10 log entries are already seeded and waiting."
 echo ""
 
-# Keep container running
 exec "$@"

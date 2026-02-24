@@ -12,225 +12,173 @@ jobs:
   build-release:
     name: Build and Release
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
+      # ── Node / Frontend ────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          echo "✓ Frontend built ($(du -sh dist | cut -f1))"
+
+      # ── Redoc (offline API docs) ───────────────────────────────────────────
+      - name: Download Redoc standalone
+        run: |
+          curl -fsSL \
+            https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js \
+            -o docs/api-ui/redoc.standalone.js
+          echo "✓ Redoc downloaded ($(du -sh docs/api-ui/redoc.standalone.js | cut -f1))"
+
+      # ── Go ────────────────────────────────────────────────────────────────
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-      
+          cache: true
+
+      - name: Download Go modules
+        run: go mod download
+
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      
+
       - name: Build binaries
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          # Set version via ldflags
-          VERSION=${{ steps.version.outputs.VERSION }}
+          mkdir -p build
           LDFLAGS="-s -w -X main.Version=${VERSION}"
-          
-          # Linux amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/rsyslox-linux-amd64 .
-          
-          # Linux arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/rsyslox-linux-arm64 .
-          
-          # Make executable
+
+          echo "Building linux/amd64…"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags "${LDFLAGS}" -o build/rsyslox-linux-amd64 .
+
+          echo "Building linux/arm64…"
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+            go build -ldflags "${LDFLAGS}" -o build/rsyslox-linux-arm64 .
+
           chmod +x build/rsyslox-*
-      
-      - name: Create offline package
+          ls -lh build/
+
+      # ── Offline package ───────────────────────────────────────────────────
+      - name: Create offline package (amd64)
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          # Create package directory
-          mkdir -p package
-          
-          # Copy files
-          cp build/rsyslox-linux-amd64 package/rsyslox
-          cp .env.example package/
-          cp rsyslox.service package/
-          cp LICENSE package/
-          
-          # Create README for package
-          cat > package/README.md << 'PKGEOF'
-          # rsyslox - Offline Package
-          
+          PKG=package
+          mkdir -p $PKG
+
+          # Binary
+          cp build/rsyslox-linux-amd64 $PKG/rsyslox
+          chmod +x $PKG/rsyslox
+
+          # Systemd service
+          cp rsyslox.service $PKG/
+
+          # License
+          cp LICENSE $PKG/ 2>/dev/null || true
+
+          # Install script (generated from scripts/install.sh)
+          cp scripts/install.sh $PKG/install.sh
+          chmod +x $PKG/install.sh
+
+          # Package README
+          cat > $PKG/README.md << 'EOF'
+          # rsyslox ${VERSION} — Offline Package
+
           ## Quick Install
-          
+
           ```bash
-          # 1. Run install script
           sudo ./install.sh
-          
-          # 2. Configure database credentials
-          sudo nano /opt/rsyslox/.env
-          # Set: DB_HOST, DB_NAME, DB_USER, DB_PASS
-          
-          # 3. Set API key
-          # Generate: openssl rand -hex 32
-          sudo nano /opt/rsyslox/.env
-          # Set: API_KEY=your-generated-key
-          
-          # 4. Start
-          sudo systemctl enable --now rsyslox
-          sudo systemctl status rsyslox
-          
-          # 5. Test
-          curl http://localhost:8000/health
           ```
-          
-          ## Documentation
-          
-          Full documentation: https://github.com/phil-bot/rsyslox
-          PKGEOF
-          
-          # Create install script
-          cat > package/install.sh << 'INSTEOF'
-          #!/bin/bash
-          set -e
-          
-          echo "Installing rsyslox..."
-          
-          # Check if running as root
-          if [ "$EUID" -ne 0 ]; then 
-            echo "Please run with sudo"
-            exit 1
-          fi
-          
-          INSTALL_DIR=/opt/rsyslox
-          
-          # Create directory
-          mkdir -p $INSTALL_DIR
-          
-          # Copy binary
-          cp rsyslox $INSTALL_DIR/
-          chmod +x $INSTALL_DIR/rsyslox
-          
-          # Copy config if not exists
-          if [ ! -f $INSTALL_DIR/.env ]; then
-            cp .env.example $INSTALL_DIR/.env
-            echo "✓ Config file created: $INSTALL_DIR/.env"
-          else
-            echo "✓ Config file already exists (not overwritten)"
-          fi
-          
-          # Copy systemd service
-          cp rsyslox.service /etc/systemd/system/
-          systemctl daemon-reload
-          
-          echo ""
-          echo "✓ Installation complete!"
-          echo ""
-          echo "IMPORTANT - Configuration required:"
-          echo ""
-          echo "  1. Set database credentials:"
-          echo "     sudo nano $INSTALL_DIR/.env"
-          echo "     Set: DB_HOST, DB_NAME, DB_USER, DB_PASS"
-          echo ""
-          echo "  2. Set API key (generate: openssl rand -hex 32):"
-          echo "     sudo nano $INSTALL_DIR/.env"
-          echo "     Set: API_KEY=your-generated-key"
-          echo ""
-          echo "  3. Secure config file:"
-          echo "     sudo chmod 600 $INSTALL_DIR/.env"
-          echo ""
-          echo "  4. Start service:"
-          echo "     sudo systemctl enable --now rsyslox"
-          echo ""
-          echo "  5. Check status:"
-          echo "     sudo systemctl status rsyslox"
-          echo ""
-          echo "  6. Test API:"
-          echo "     curl http://localhost:8000/health"
-          echo ""
-          INSTEOF
-          
-          chmod +x package/install.sh
-          
+
+          The installer will:
+          - Copy the binary to /opt/rsyslox/
+          - Create the rsyslox system user
+          - Install the systemd service
+          - Open the setup wizard in your browser
+
+          ## Full documentation
+
+          https://github.com/phil-bot/rsyslox
+          EOF
+
           # Create tarball
-          tar czf rsyslox-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz package/
-          
-          echo "✓ Offline package created"
-      
-      - name: Generate checksums
+          TARBALL="rsyslox-${VERSION}-offline-linux-amd64.tar.gz"
+          tar czf "$TARBALL" $PKG/
+          echo "✓ Package created: $TARBALL ($(du -sh $TARBALL | cut -f1))"
+
+      # ── Checksums ─────────────────────────────────────────────────────────
+      - name: Generate SHA256 checksums
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          cd build
-          sha256sum rsyslox-* > SHA256SUMS
-          cd ..
-          sha256sum rsyslox-*.tar.gz >> build/SHA256SUMS
-          cat build/SHA256SUMS
-      
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+          sha256sum \
+            build/rsyslox-linux-amd64 \
+            build/rsyslox-linux-arm64 \
+            rsyslox-${VERSION}-offline-linux-amd64.tar.gz \
+            > SHA256SUMS
+          cat SHA256SUMS
+
+      # ── GitHub Release ────────────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             build/rsyslox-linux-amd64
             build/rsyslox-linux-arm64
             rsyslox-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz
-            build/SHA256SUMS
+            SHA256SUMS
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
           generate_release_notes: true
           body: |
             ## rsyslox ${{ steps.version.outputs.VERSION }}
-            
-            High-performance REST API for rsyslog/MySQL written in Go.
-            
+
             ### 📦 Downloads
-            
-            **Recommended: Offline Package (includes installer)**
-            - `rsyslox-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz` - Complete package with install script
-            
-            **Standalone Binaries**
-            - `rsyslox-linux-amd64` - Linux x86_64
-            - `rsyslox-linux-arm64` - Linux ARM64
-            
-            ### 🚀 Quick Install (Offline Package)
-            
+
+            | File | Description |
+            |------|-------------|
+            | `rsyslox-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz` | **Recommended** — complete package with install script |
+            | `rsyslox-linux-amd64` | Standalone binary (Linux x86_64) |
+            | `rsyslox-linux-arm64` | Standalone binary (Linux ARM64) |
+            | `SHA256SUMS` | Checksums for verification |
+
+            ### 🚀 Quick Install
+
             ```bash
-            # Download
+            # Download offline package
             wget https://github.com/phil-bot/rsyslox/releases/download/${{ steps.version.outputs.VERSION }}/rsyslox-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz
-            
-            # Extract
+
+            # Extract and install
             tar xzf rsyslox-${{ steps.version.outputs.VERSION }}-offline-linux-amd64.tar.gz
             cd package
-            
-            # Install
             sudo ./install.sh
-            
-            # Configure (REQUIRED!)
-            sudo nano /opt/rsyslox/.env
-            # Set: DB_HOST, DB_NAME, DB_USER, DB_PASS, API_KEY
-            
-            # Secure config
-            sudo chmod 600 /opt/rsyslox/.env
-            
-            # Start
-            sudo systemctl enable --now rsyslox
             ```
-            
-            ### 🔧 Standalone Binary
-            
-            ```bash
-            # Download
-            wget https://github.com/phil-bot/rsyslox/releases/download/${{ steps.version.outputs.VERSION }}/rsyslox-linux-amd64
-            
-            # Make executable
-            chmod +x rsyslox-linux-amd64
-            
-            # Run
-            ./rsyslox-linux-amd64
-            ```
-            
-            ### ✅ Verify Checksums
-            
+
+            The install script will guide you through initial setup via the web UI.
+
+            ### ✅ Verify checksums
+
             ```bash
             wget https://github.com/phil-bot/rsyslox/releases/download/${{ steps.version.outputs.VERSION }}/SHA256SUMS
             sha256sum -c SHA256SUMS
             ```
-            
+
             ### 📚 Documentation
-            
-            Full documentation: https://github.com/phil-bot/rsyslox
+
+            https://github.com/phil-bot/rsyslox
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

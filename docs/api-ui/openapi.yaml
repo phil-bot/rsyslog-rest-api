@@ -1,0 +1,573 @@
+openapi: 3.1.0
+
+info:
+  title: rsyslox API
+  version: "0.4.0"
+  description: |
+    REST API for rsyslox — a syslog viewer and management tool.
+
+    ## Authentication
+
+    Most endpoints require authentication via one of two methods:
+
+    | Method | Header | Access level |
+    |--------|--------|--------------|
+    | Admin session token | `X-Session-Token: <token>` | Full access |
+    | Read-only API key | `X-API-Key: <key>` | `/api/logs`, `/api/meta` only |
+
+    Obtain an admin session token via `POST /api/admin/login`.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: public
+    description: No authentication required
+  - name: logs
+    description: Log retrieval (read-only key or admin)
+  - name: meta
+    description: Metadata and filter options (read-only key or admin)
+  - name: admin
+    description: Administration (admin session token only)
+  - name: setup
+    description: First-run setup wizard (localhost only)
+
+# ──────────────────────────────────────────────────────────────────────────────
+paths:
+
+  /health:
+    get:
+      tags: [public]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+        "503":
+          description: Service unavailable (database unreachable)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+
+  # ── Logs ──────────────────────────────────────────────────────────────────
+
+  /api/logs:
+    get:
+      tags: [logs]
+      summary: Query log entries
+      operationId: getLogs
+      security:
+        - SessionToken: []
+        - ApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/StartDate"
+        - $ref: "#/components/parameters/EndDate"
+        - name: Severity
+          in: query
+          description: "Filter by severity (0–7, RFC 5424). Repeatable."
+          schema: { type: integer, minimum: 0, maximum: 7 }
+        - name: Priority
+          in: query
+          description: "Deprecated alias for Severity."
+          schema: { type: integer }
+          deprecated: true
+        - name: Facility
+          in: query
+          description: "Filter by facility code. Repeatable."
+          schema: { type: integer }
+        - name: FromHost
+          in: query
+          description: "Filter by hostname. Repeatable."
+          schema: { type: string }
+        - name: SysLogTag
+          in: query
+          description: "Filter by syslog tag. Repeatable."
+          schema: { type: string }
+        - name: Message
+          in: query
+          description: "Substring search in message. Repeatable (OR)."
+          schema: { type: string }
+      responses:
+        "200":
+          description: Log entries matching the filter
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogsResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Meta ──────────────────────────────────────────────────────────────────
+
+  /api/meta:
+    get:
+      tags: [meta]
+      summary: List available columns
+      operationId: getMeta
+      security:
+        - SessionToken: []
+        - ApiKey: []
+      responses:
+        "200":
+          description: Available column names
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetaResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/meta/{column}:
+    get:
+      tags: [meta]
+      summary: Get distinct values for a column
+      operationId: getMetaColumn
+      security:
+        - SessionToken: []
+        - ApiKey: []
+      parameters:
+        - name: column
+          in: path
+          required: true
+          description: "Column name (e.g. `FromHost`, `SysLogTag`, `Severity`)"
+          schema: { type: string }
+        - $ref: "#/components/parameters/StartDate"
+        - $ref: "#/components/parameters/EndDate"
+        - name: Severity
+          in: query
+          schema: { type: integer }
+        - name: Facility
+          in: query
+          schema: { type: integer }
+        - name: FromHost
+          in: query
+          schema: { type: string }
+        - name: SysLogTag
+          in: query
+          schema: { type: string }
+        - name: Message
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Distinct values for the column
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items: { type: string }
+                    description: String column values
+                  - type: array
+                    items: { type: integer }
+                    description: Integer column values
+                  - type: array
+                    items: { $ref: "#/components/schemas/MetaValue" }
+                    description: Severity or Facility values with labels
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Admin: auth ───────────────────────────────────────────────────────────
+
+  /api/admin/login:
+    post:
+      tags: [admin]
+      summary: Admin login
+      operationId: adminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: Login successful — returns session token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/admin/logout:
+    post:
+      tags: [admin]
+      summary: Admin logout
+      operationId: adminLogout
+      security:
+        - SessionToken: []
+      responses:
+        "200":
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+
+  # ── Admin: config ─────────────────────────────────────────────────────────
+
+  /api/admin/config:
+    get:
+      tags: [admin]
+      summary: Get current configuration
+      operationId: getConfig
+      security:
+        - SessionToken: []
+      responses:
+        "200":
+          description: Current configuration (passwords excluded)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigView" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      tags: [admin]
+      summary: Update configuration
+      operationId: updateConfig
+      security:
+        - SessionToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfigUpdateRequest" }
+      responses:
+        "200":
+          description: Updated configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigView" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Admin: keys ───────────────────────────────────────────────────────────
+
+  /api/admin/keys:
+    get:
+      tags: [admin]
+      summary: List read-only API keys
+      operationId: listKeys
+      security:
+        - SessionToken: []
+      responses:
+        "200":
+          description: List of key names (hashes never returned)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KeyInfo" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [admin]
+      summary: Create a new read-only API key
+      operationId: createKey
+      security:
+        - SessionToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Unique human-readable name for the key
+      responses:
+        "201":
+          description: Key created — plaintext returned exactly once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateKeyResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Key name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIError" }
+
+  /api/admin/keys/{name}:
+    delete:
+      tags: [admin]
+      summary: Revoke a read-only API key
+      operationId: deleteKey
+      security:
+        - SessionToken: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Setup ─────────────────────────────────────────────────────────────────
+
+  /api/setup:
+    post:
+      tags: [setup]
+      summary: First-run setup wizard
+      operationId: setup
+      description: |
+        Only accessible from **localhost**. Only active when no configuration file exists.
+        Calling this endpoint on a configured instance returns 403.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupRequest" }
+      responses:
+        "200":
+          description: Setup complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Not accessible remotely
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIError" }
+
+# ──────────────────────────────────────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    SessionToken:
+      type: apiKey
+      in: header
+      name: X-Session-Token
+      description: Admin session token obtained from POST /api/admin/login
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Read-only API key (access to /api/logs and /api/meta only)
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: "Maximum number of entries to return (default: 15)"
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 15 }
+    Offset:
+      name: offset
+      in: query
+      description: "Number of entries to skip for pagination (default: 0)"
+      schema: { type: integer, minimum: 0, default: 0 }
+    StartDate:
+      name: start_date
+      in: query
+      description: "Start of time range (format: `2006-01-02 15:04:05`)"
+      schema: { type: string, example: "2025-01-01 00:00:00" }
+    EndDate:
+      name: end_date
+      in: query
+      description: "End of time range (format: `2006-01-02 15:04:05`)"
+      schema: { type: string, example: "2025-12-31 23:59:59" }
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/APIError" }
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/APIError" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/APIError" }
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/APIError" }
+
+  schemas:
+
+    APIError:
+      type: object
+      properties:
+        code:    { type: string, example: "INVALID_PARAMETER" }
+        message: { type: string, example: "limit must be between 1 and 1000" }
+        details: { type: string }
+        field:   { type: string }
+
+    HealthResponse:
+      type: object
+      properties:
+        status:    { type: string, enum: [healthy, unhealthy] }
+        database:  { type: string, enum: [connected, disconnected] }
+        version:   { type: string, example: "v0.4.0" }
+        timestamp: { type: string, format: date-time }
+
+    LogEntry:
+      type: object
+      properties:
+        ID:                 { type: integer }
+        CustomerID:         { type: integer }
+        ReceivedAt:         { type: string, format: date-time }
+        DeviceReportedTime: { type: string, format: date-time }
+        Facility:           { type: integer }
+        Priority:           { type: integer }
+        Severity:
+          $ref: "#/components/schemas/MetaValue"
+        FromHost:           { type: string }
+        Message:            { type: string }
+        SysLogTag:          { type: string }
+        InfoUnitID:         { type: integer }
+        SystemID:           { type: integer }
+
+    LogsResponse:
+      type: object
+      properties:
+        total:  { type: integer, description: "Total matching entries (for pagination)" }
+        offset: { type: integer }
+        limit:  { type: integer }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/LogEntry" }
+
+    MetaValue:
+      type: object
+      properties:
+        val:   { type: integer }
+        label: { type: string, example: "Warning" }
+
+    MetaResponse:
+      type: object
+      properties:
+        available_columns:
+          type: array
+          items: { type: string }
+        usage: { type: string }
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Session token — include as X-Session-Token in subsequent requests
+
+    ConfigView:
+      type: object
+      properties:
+        server:
+          type: object
+          properties:
+            host:                  { type: string }
+            port:                  { type: integer }
+            use_ssl:               { type: boolean }
+            ssl_cert:              { type: string }
+            ssl_key:               { type: string }
+            allowed_origins:       { type: array, items: { type: string } }
+            auto_refresh_interval: { type: integer }
+        database:
+          type: object
+          properties:
+            host: { type: string }
+            port: { type: integer }
+            name: { type: string }
+            user: { type: string }
+        cleanup:
+          type: object
+          properties:
+            enabled:           { type: boolean }
+            disk_path:         { type: string }
+            threshold_percent: { type: number }
+            batch_size:        { type: integer }
+            interval_seconds:  { type: integer }
+
+    ConfigUpdateRequest:
+      type: object
+      properties:
+        server:
+          type: object
+          properties:
+            allowed_origins:       { type: array, items: { type: string } }
+            auto_refresh_interval: { type: integer, minimum: 5 }
+            use_ssl:               { type: boolean }
+        cleanup:
+          type: object
+          properties:
+            enabled:           { type: boolean }
+            disk_path:         { type: string }
+            threshold_percent: { type: number, minimum: 1, maximum: 100 }
+            batch_size:        { type: integer, minimum: 1 }
+            interval_seconds:  { type: integer, minimum: 60 }
+
+    KeyInfo:
+      type: object
+      properties:
+        name: { type: string }
+
+    CreateKeyResponse:
+      type: object
+      properties:
+        name:    { type: string }
+        key:     { type: string, description: "Plaintext key — shown exactly once" }
+        message: { type: string }
+
+    SetupRequest:
+      type: object
+      required: [db_host, db_name, db_user, db_password, admin_password]
+      properties:
+        db_host:        { type: string, example: "localhost" }
+        db_port:        { type: integer, default: 3306 }
+        db_name:        { type: string, example: "Syslog" }
+        db_user:        { type: string }
+        db_password:    { type: string, format: password }
+        admin_password: { type: string, format: password, minLength: 12 }
+        server_host:    { type: string, default: "0.0.0.0" }
+        server_port:    { type: integer, default: 8000 }
+        use_ssl:        { type: boolean, default: false }

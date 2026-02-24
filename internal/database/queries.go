@@ -6,7 +6,7 @@ import (
 	"github.com/phil-bot/rsyslox/internal/models"
 )
 
-// QueryLogs executes a logs query with filters and pagination
+// QueryLogs executes a paginated log query with the given WHERE clause and args.
 func (db *DB) QueryLogs(whereClause string, args []interface{}, limit, offset int) ([]models.LogEntry, error) {
 	query := fmt.Sprintf(`
 		SELECT ID, CustomerID, ReceivedAt, DeviceReportedTime, Facility, Priority,
@@ -27,7 +27,7 @@ func (db *DB) QueryLogs(whereClause string, args []interface{}, limit, offset in
 	}
 	defer rows.Close()
 
-	var entries []models.LogEntry
+	entries := []models.LogEntry{}
 	for rows.Next() {
 		var entry models.LogEntry
 		if err := entry.ScanFromRows(rows); err != nil {
@@ -36,32 +36,22 @@ func (db *DB) QueryLogs(whereClause string, args []interface{}, limit, offset in
 		entries = append(entries, entry)
 	}
 
-	if entries == nil {
-		entries = []models.LogEntry{}
-	}
-
 	return entries, nil
 }
 
-// CountLogs counts total matching entries for a query
+// CountLogs counts the total number of rows matching the given WHERE clause.
 func (db *DB) CountLogs(whereClause string, args []interface{}) (int, error) {
 	query := fmt.Sprintf("SELECT COUNT(*) FROM SystemEvents WHERE %s", whereClause)
-
 	var total int
 	if err := db.QueryRow(query, args...).Scan(&total); err != nil {
 		return 0, fmt.Errorf("count query failed: %v", err)
 	}
-
 	return total, nil
 }
 
-// QueryDistinctValues queries distinct values for a column with optional filters.
-//
-// "Severity" is a virtual column — it is computed from the Priority column using
-// MOD 8, which works correctly for both legacy and modern rsyslog formats as well
-// as mixed datasets.
+// QueryDistinctValues returns distinct values for a column, with optional filters.
+// "Severity" is a virtual column computed from Priority MOD 8.
 func (db *DB) QueryDistinctValues(column, whereClause string, args []interface{}) (interface{}, error) {
-	// "Severity" is a virtual column derived from Priority MOD 8
 	if column == "Severity" {
 		return db.queryDistinctSeverity(whereClause, args)
 	}
@@ -70,134 +60,110 @@ func (db *DB) QueryDistinctValues(column, whereClause string, args []interface{}
 		"SELECT DISTINCT %s FROM SystemEvents WHERE %s AND %s IS NOT NULL ORDER BY %s ASC",
 		column, whereClause, column, column,
 	)
-
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("meta query failed: %v", err)
 	}
 	defer rows.Close()
 
-	// Facility column returns values with RFC labels
 	if column == "Facility" {
 		return scanMetaFacilityValues(rows)
 	}
-
-	// Check if column is an integer type
 	if db.isIntegerColumn(column) {
 		return scanIntValues(rows)
 	}
-
-	// String columns
 	return scanStringValues(rows)
 }
 
-// queryDistinctSeverity returns distinct Severity values with RFC labels.
-// Uses Priority MOD 8 to work across legacy, modern, and mixed datasets.
-func (db *DB) queryDistinctSeverity(whereClause string, args []interface{}) ([]models.MetaValue, error) {
+// queryDistinctSeverity returns distinct Severity values derived from Priority MOD 8.
+func (db *DB) queryDistinctSeverity(whereClause string, args []interface{}) (interface{}, error) {
 	query := fmt.Sprintf(
 		"SELECT DISTINCT Priority MOD 8 AS Severity FROM SystemEvents WHERE %s ORDER BY Severity ASC",
 		whereClause,
 	)
-
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("severity meta query failed: %v", err)
 	}
 	defer rows.Close()
 
-	var values []models.MetaValue
+	var result []models.MetaValue
 	for rows.Next() {
-		var val int
-		if err := rows.Scan(&val); err != nil {
+		var v int
+		if err := rows.Scan(&v); err != nil {
 			continue
 		}
-		values = append(values, models.MetaValue{
-			Val:   val,
-			Label: models.GetSeverityLabel(val),
-		})
+		label := ""
+		if v >= 0 && v < len(models.SeverityLabels) {
+			label = models.SeverityLabels[v]
+		}
+		result = append(result, models.MetaValue{Val: v, Label: label})
 	}
-
-	if values == nil {
-		values = []models.MetaValue{}
+	if result == nil {
+		result = []models.MetaValue{}
 	}
-	return values, nil
+	return result, nil
 }
 
-// isIntegerColumn checks if a column is an integer type
+// scanMetaFacilityValues scans facility integer values and attaches RFC labels.
+func scanMetaFacilityValues(rows interface{ Scan(...interface{}) error; Next() bool }) (interface{}, error) {
+	var result []models.MetaValue
+	for rows.Next() {
+		var v int
+		if err := rows.Scan(&v); err != nil {
+			continue
+		}
+		label := ""
+		if v >= 0 && v < len(models.FacilityLabels) {
+			label = models.FacilityLabels[v]
+		}
+		result = append(result, models.MetaValue{Val: v, Label: label})
+	}
+	if result == nil {
+		result = []models.MetaValue{}
+	}
+	return result, nil
+}
+
+// scanIntValues scans a result set of single integer values.
+func scanIntValues(rows interface{ Scan(...interface{}) error; Next() bool }) (interface{}, error) {
+	var result []int
+	for rows.Next() {
+		var v int
+		if err := rows.Scan(&v); err != nil {
+			continue
+		}
+		result = append(result, v)
+	}
+	if result == nil {
+		result = []int{}
+	}
+	return result, nil
+}
+
+// scanStringValues scans a result set of single string values.
+func scanStringValues(rows interface{ Scan(...interface{}) error; Next() bool }) (interface{}, error) {
+	var result []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			continue
+		}
+		result = append(result, v)
+	}
+	if result == nil {
+		result = []string{}
+	}
+	return result, nil
+}
+
+// isIntegerColumn returns true for columns known to hold integer values.
 func (db *DB) isIntegerColumn(column string) bool {
-	intColumns := []string{
-		"ID", "CustomerID", "NTSeverity", "Importance", "EventCategory", "EventID",
-		"MaxAvailable", "CurrUsage", "MinUsage", "MaxUsage", "InfoUnitID", "SystemID",
-		"Priority",
+	intCols := map[string]bool{
+		"Facility": true, "Priority": true, "NTSeverity": true,
+		"Importance": true, "EventCategory": true, "EventID": true,
+		"MaxAvailable": true, "CurrUsage": true, "MinUsage": true,
+		"MaxUsage": true, "InfoUnitID": true, "SystemID": true,
 	}
-	for _, col := range intColumns {
-		if col == column {
-			return true
-		}
-	}
-	return false
-}
-
-// Helper functions for scanning different value types
-
-func scanMetaFacilityValues(rows interface {
-	Next() bool
-	Scan(...interface{}) error
-}) ([]models.MetaValue, error) {
-	var values []models.MetaValue
-	for rows.Next() {
-		var val int
-		if err := rows.Scan(&val); err != nil {
-			continue
-		}
-		values = append(values, models.MetaValue{
-			Val:   val,
-			Label: models.GetFacilityLabel(val),
-		})
-	}
-
-	if values == nil {
-		values = []models.MetaValue{}
-	}
-	return values, nil
-}
-
-func scanIntValues(rows interface {
-	Next() bool
-	Scan(...interface{}) error
-}) ([]int, error) {
-	var values []int
-	for rows.Next() {
-		var val int
-		if err := rows.Scan(&val); err != nil {
-			continue
-		}
-		values = append(values, val)
-	}
-
-	if values == nil {
-		values = []int{}
-	}
-	return values, nil
-}
-
-func scanStringValues(rows interface {
-	Next() bool
-	Scan(...interface{}) error
-}) ([]string, error) {
-	var values []string
-	for rows.Next() {
-		var val string
-		if err := rows.Scan(&val); err != nil {
-			continue
-		}
-		if val != "" {
-			values = append(values, val)
-		}
-	}
-
-	if values == nil {
-		values = []string{}
-	}
-	return values, nil
+	return intCols[column]
 }

@@ -9,19 +9,18 @@ import (
 	"github.com/phil-bot/rsyslox/internal/models"
 )
 
-// LogsHandler handles log retrieval requests
+// LogsHandler handles GET /api/logs.
 type LogsHandler struct {
 	db *database.DB
 }
 
-// NewLogsHandler creates a new logs handler
+// NewLogsHandler creates a new LogsHandler.
 func NewLogsHandler(db *database.DB) *LogsHandler {
 	return &LogsHandler{db: db}
 }
 
-// ServeHTTP handles the /logs endpoint
+// ServeHTTP handles the /api/logs endpoint.
 func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Only allow GET requests
 	if r.Method != http.MethodGet {
 		respondError(w, http.StatusMethodNotAllowed,
 			models.NewAPIError("METHOD_NOT_ALLOWED", "Only GET method is allowed"))
@@ -30,11 +29,8 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 
-	// Validate pagination
-	limit, offset, err := filters.ValidatePagination(
-		query.Get("limit"),
-		query.Get("offset"),
-	)
+	// Pagination
+	limit, offset, err := filters.ValidatePagination(query.Get("limit"), query.Get("offset"))
 	if err != nil {
 		if apiErr, ok := err.(*models.APIError); ok {
 			respondError(w, http.StatusBadRequest, apiErr)
@@ -45,11 +41,8 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate date range
-	startDate, endDate, err := filters.ValidateDateRange(
-		query.Get("start_date"),
-		query.Get("end_date"),
-	)
+	// Date range
+	startDate, endDate, err := filters.ValidateDateRange(query.Get("start_date"), query.Get("end_date"))
 	if err != nil {
 		if apiErr, ok := err.(*models.APIError); ok {
 			respondError(w, http.StatusBadRequest, apiErr)
@@ -60,8 +53,7 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate severities.
-	// ?Severity= is the primary parameter; ?Priority= is accepted as a deprecated alias.
+	// Severity — accept ?Severity= (preferred) or ?Priority= (deprecated alias)
 	severityParams := query["Severity"]
 	if len(severityParams) == 0 {
 		severityParams = query["Priority"]
@@ -77,7 +69,7 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate facilities
+	// Facility
 	facilities, err := filters.ValidateFacilities(query["Facility"])
 	if err != nil {
 		if apiErr, ok := err.(*models.APIError); ok {
@@ -89,7 +81,7 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate messages
+	// Message search
 	messages, err := filters.ValidateMessages(query["Message"])
 	if err != nil {
 		if apiErr, ok := err.(*models.APIError); ok {
@@ -101,7 +93,7 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build filter query
+	// Build WHERE clause
 	builder := filters.New()
 	builder.AddDateRange(startDate, endDate)
 	builder.AddStringMultiValue("FromHost", query["FromHost"])
@@ -112,7 +104,7 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	whereClause, args := builder.Build()
 
-	// Count total matching entries
+	// Count total
 	total, err := h.db.CountLogs(whereClause, args)
 	if err != nil {
 		log.Printf("Count query error: %v", err)
@@ -121,7 +113,7 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Query entries with pagination
+	// Query page
 	entries, err := h.db.QueryLogs(whereClause, args, limit, offset)
 	if err != nil {
 		log.Printf("Query error: %v", err)

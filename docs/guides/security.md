@@ -1,332 +1,157 @@
 # Security Guide
 
-Security best practices for rsyslog REST API.
+Security best practices for rsyslox.
 
 ## Security Checklist
 
-- ✅ Strong API key (32+ bytes)
-- ✅ SSL/TLS enabled
-- ✅ CORS properly configured
-- ✅ Database read-only user
-- ✅ Firewall configured
-- ✅ Rate limiting enabled
-- ✅ Logs monitored
-- ✅ Regular security audits
+- ✅ Strong admin password (12+ characters)
+- ✅ Read-only API keys for external tools
+- ✅ SSL/TLS enabled (via reverse proxy or built-in)
+- ✅ CORS origins restricted to specific domains
+- ✅ Database user has read-only access
+- ✅ Firewall blocks direct port 8000 access (if using reverse proxy)
+- ✅ Rate limiting in reverse proxy
 
-## API Key Security
+## Authentication
 
-### Generate Strong Keys
+rsyslox uses two separate authentication mechanisms:
 
-```bash
-# Minimum 32 bytes (64 hex characters)
-openssl rand -hex 32
+**Admin session token** — full access. Obtained via `POST /api/admin/login`. Used for the web UI and admin API endpoints. Stored in the browser's `sessionStorage`.
 
-# Save to .env
-echo "API_KEY=$(openssl rand -hex 32)" >> .env
+**Read-only API key** — restricted access. Created in **Admin → API Keys**. Can only access `/api/logs` and `/api/meta`. Keys are stored as SHA-256 hashes; plaintext is shown only once at creation.
+
+### API Key Best Practices
+
+- Create one key per consumer (monitoring system, dashboard, script) so each can be revoked independently
+- Revoke compromised keys immediately in Admin → API Keys
+- Never commit key values to version control
+
+### Admin Password
+
+- Minimum 12 characters — use a passphrase or password manager
+- The password is stored as a bcrypt hash (cost 12) — it cannot be recovered, only reset via the `hash-password` CLI command. See [Troubleshooting → Authentication Issues](troubleshooting.md#authentication-issues) for the exact steps.
+
+## SSL/TLS
+
+Use HTTPS in production. Options:
+
+**Reverse proxy (recommended):** nginx or Apache handle TLS termination. See [Deployment Guide](deployment.md).
+
+**Built-in SSL:** rsyslox can terminate TLS directly. Place `cert.pem` and `key.pem` in `/etc/rsyslox/certs/`, then enable SSL in **Admin → Server**.
+
+## CORS
+
+Restrict origins in **Admin → Server → CORS origins**. Never leave `*` in production:
+
+```
+# Single origin
+https://dashboard.example.com
+
+# Multiple (comma-separated)
+https://app1.example.com,https://monitoring.example.com
 ```
 
-### Secure Storage
+## Database
 
-```bash
-# Restrict permissions
-sudo chmod 600 /opt/rsyslog-rest-api/.env
-sudo chown root:root /opt/rsyslog-rest-api/.env
-```
-
-### Key Rotation
-
-```bash
-# Generate new key
-NEW_KEY=$(openssl rand -hex 32)
-
-# Update .env
-sudo sed -i "s/^API_KEY=.*/API_KEY=$NEW_KEY/" /opt/rsyslog-rest-api/.env
-
-# Restart service
-sudo systemctl restart rsyslog-rest-api
-```
-
-## SSL/TLS Configuration
-
-### Production (Let's Encrypt)
-
-```bash
-# Install certbot
-sudo apt-get install certbot python3-certbot-nginx
-
-# Get certificate
-sudo certbot --nginx -d api.example.com
-
-# Auto-renewal
-sudo certbot renew --dry-run
-```
-
-### Development (Self-Signed)
-
-```bash
-# Generate certificate
-openssl req -x509 -newkey rsa:4096 -nodes \
-  -keyout key.pem -out cert.pem -days 365 \
-  -subj "/CN=localhost"
-
-# Configure
-USE_SSL=true
-SSL_CERTFILE=/path/to/cert.pem
-SSL_KEYFILE=/path/to/key.pem
-```
-
-## CORS Security
-
-### Production Configuration
-
-```bash
-# NEVER use * in production!
-ALLOWED_ORIGINS=https://dashboard.example.com,https://monitoring.example.com
-```
-
-### Testing
-
-```bash
-# Test CORS
-curl -H "Origin: https://dashboard.example.com" \
-     -H "Access-Control-Request-Method: GET" \
-     -X OPTIONS \
-     https://api.example.com/logs
-```
-
-## Database Security
-
-### Read-Only User (Recommended)
+Use a read-only database user:
 
 ```sql
--- Create read-only user
-CREATE USER 'rsyslog_api'@'localhost' IDENTIFIED BY 'strong-password';
-GRANT SELECT ON Syslog.* TO 'rsyslog_api'@'localhost';
+CREATE USER 'rsyslox'@'localhost' IDENTIFIED BY 'strong-password';
+GRANT SELECT ON Syslog.SystemEvents TO 'rsyslox'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-Update `.env`:
-```bash
-DB_USER=rsyslog_api
-DB_PASS=strong-password
+Set this user in the setup wizard. If you later need the cleanup service (which requires `DELETE`), grant that additionally:
+
+```sql
+GRANT DELETE ON Syslog.SystemEvents TO 'rsyslox'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-### Remote Database
+## Firewall
+
+If running behind a reverse proxy, block direct access to port 8000:
 
 ```bash
-# Use SSL for remote connections
-DB_HOST=db.example.com
-
-# MySQL SSL config (my.cnf)
-[client]
-ssl-ca=/path/to/ca.pem
-ssl-cert=/path/to/client-cert.pem
-ssl-key=/path/to/client-key.pem
+sudo ufw deny 8000/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 80/tcp
 ```
 
-## Firewall Configuration
-
-### ufw
-
-```bash
-# Allow only nginx
-sudo ufw allow 'Nginx Full'
-sudo ufw deny 8000/tcp  # Block direct API access
-
-# Allow SSH (be careful!)
-sudo ufw allow 22/tcp
-
-# Enable
-sudo ufw enable
-```
-
-### IP Whitelisting
+## Rate Limiting (nginx)
 
 ```nginx
-# nginx - Allow only specific IPs
-location / {
-    allow 10.0.1.0/24;     # Internal network
-    allow 203.0.113.0/24;  # Office network
-    deny all;
-    
-    proxy_pass http://rsyslog_api;
-}
-```
-
-## Rate Limiting
-
-### nginx
-
-```nginx
-# Define rate limit zone
 limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
-limit_req_zone $http_x_api_key zone=api_key_limit:10m rate=100r/s;
 
-server {
-    location / {
-        # Per IP: 10 req/s
-        limit_req zone=api_limit burst=20 nodelay;
-        
-        # Per API key: 100 req/s
-        limit_req zone=api_key_limit burst=200 nodelay;
-        
-        # Return 429 on limit
-        limit_req_status 429;
-        
-        proxy_pass http://rsyslog_api;
-    }
+location / {
+    limit_req zone=api_limit burst=20 nodelay;
+    limit_req_status 429;
+    proxy_pass http://rsyslox;
 }
 ```
 
-### iptables
+## systemd Sandboxing
 
-```bash
-# Limit connections per IP
-sudo iptables -A INPUT -p tcp --dport 8000 -m connlimit \
-  --connlimit-above 10 -j REJECT
-
-# Limit new connections per minute
-sudo iptables -A INPUT -p tcp --dport 8000 -m recent --set
-sudo iptables -A INPUT -p tcp --dport 8000 -m recent --update \
-  --seconds 60 --hitcount 100 -j REJECT
-```
-
-## Security Headers
-
-### nginx Configuration
-
-```nginx
-add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-add_header X-Frame-Options "DENY" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header X-XSS-Protection "1; mode=block" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-add_header Content-Security-Policy "default-src 'self'" always;
-```
-
-## Monitoring & Auditing
-
-### Failed Authentication Attempts
-
-```bash
-# Monitor auth failures
-sudo journalctl -u rsyslog-rest-api | grep "Invalid or missing API key"
-
-# Alert on multiple failures
-#!/bin/bash
-FAILURES=$(sudo journalctl -u rsyslog-rest-api --since "1 hour ago" | \
-           grep -c "Invalid or missing API key")
-
-if [ "$FAILURES" -gt 100 ]; then
-    echo "High number of auth failures: $FAILURES" | \
-      mail -s "Security Alert" admin@example.com
-fi
-```
-
-### Access Logging
-
-```nginx
-# Detailed access log
-log_format api_log '$remote_addr - [$time_local] '
-                   '"$request" $status $body_bytes_sent '
-                   '"$http_referer" "$http_user_agent" '
-                   '$request_time $upstream_response_time '
-                   '$http_x_api_key';
-
-access_log /var/log/nginx/api-access.log api_log;
-```
-
-## System Hardening
-
-### systemd Sandboxing
+The installer applies these restrictions automatically via the service file:
 
 ```ini
-[Service]
-# Security enhancements
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/rsyslog-rest-api
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
-RestrictRealtime=true
-RestrictNamespaces=true
-LockPersonality=true
-MemoryDenyWriteExecute=true
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 ```
 
-### SELinux (CentOS/RHEL)
+## Configuration File
 
-```bash
-# Check SELinux status
-sestatus
+`/etc/rsyslox/config.toml` contains sensitive values and is protected:
 
-# Allow API to connect to database
-sudo setsebool -P httpd_can_network_connect_db 1
-
-# Allow API to bind to port
-sudo semanage port -a -t http_port_t -p tcp 8000
-```
+- File mode `0640` — owner `root`, group `rsyslox`
+- Database password is AES-GCM encrypted (key derived from `/etc/machine-id`)
+- Admin password is a bcrypt hash
+- API key plaintext is never stored — only SHA-256 hashes
 
 ## Incident Response
 
 ### Compromised API Key
 
-```bash
-# 1. Generate new key immediately
-NEW_KEY=$(openssl rand -hex 32)
+1. Open **Admin → API Keys**
+2. Click **Revoke** next to the compromised key
+3. Create a new key and distribute it to the affected consumer
 
-# 2. Update configuration
-sudo sed -i "s/^API_KEY=.*/API_KEY=$NEW_KEY/" /opt/rsyslog-rest-api/.env
-
-# 3. Restart service
-sudo systemctl restart rsyslog-rest-api
-
-# 4. Update all clients
-# Notify users to update their API keys
-
-# 5. Audit access logs
-sudo grep "old-key" /var/log/nginx/api-access.log
-```
-
-### Suspicious Activity
+### Suspected Admin Password Compromise
 
 ```bash
-# Check recent access
-sudo journalctl -u rsyslog-rest-api --since "1 hour ago"
+# 1. Generate new bcrypt hash
+/opt/rsyslox/rsyslox hash-password "new-strong-password"
 
-# Check nginx logs
-sudo tail -1000 /var/log/nginx/api-access.log | \
-  awk '{print $1}' | sort | uniq -c | sort -rn
+# 2. Update config
+sudo nano /etc/rsyslox/config.toml
+# Replace admin_password_hash value
 
-# Block suspicious IP
-sudo ufw deny from 203.0.113.50
+# 3. Restart
+sudo systemctl restart rsyslox
+
+# 4. Immediately revoke all API keys and reissue them
+# (existing session tokens expire on restart)
 ```
 
 ## Security Audit Checklist
 
-### Monthly
+**Monthly**
+- [ ] Review access logs for anomalies: `sudo journalctl -u rsyslox -n 1000`
+- [ ] Check SSL certificate expiry
+- [ ] Review active API keys in Admin panel — revoke unused ones
 
-- [ ] Review access logs for anomalies
-- [ ] Check for failed authentication attempts
-- [ ] Verify SSL certificate expiry
-- [ ] Review firewall rules
-- [ ] Check for unauthorized database access
+**Quarterly**
+- [ ] Rotate read-only API keys
+- [ ] Review CORS origin list
+- [ ] Check for available rsyslox updates
 
-### Quarterly
+**Yearly**
+- [ ] Rotate admin password
+- [ ] Full security review
 
-- [ ] Rotate API keys
-- [ ] Update dependencies
-- [ ] Review user permissions
-- [ ] Penetration testing
-- [ ] Security scan with tools
+## More Resources
 
-### Yearly
-
-- [ ] Full security audit
-- [ ] Review disaster recovery plan
-- [ ] Update incident response procedures
-- [ ] Security training for team
+- [Deployment Guide](deployment.md) — nginx/Apache config, TLS setup
+- [Troubleshooting](troubleshooting.md) — Auth error diagnosis

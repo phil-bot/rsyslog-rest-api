@@ -1,0 +1,207 @@
+/* ============================================================
+   rsyslox design tokens
+   Colors extracted from rsyslox.svg (light) and rsyslox_dark.svg (dark)
+   Font: IBM Plex Mono (code aesthetic matches syslog tooling)
+         + IBM Plex Sans for UI text
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Brand — light logo */
+  --color-primary:  #0284c7;
+  --color-accent:   #f59e0b;
+  --color-neutral:  #475569;
+
+  /* Light theme surfaces */
+  --bg:             #ffffff;
+  --bg-surface:     #f8fafc;
+  --bg-hover:       #f1f5f9;
+  --bg-selected:    #e0f2fe;
+  --border:         #e2e8f0;
+  --text:           #1e293b;
+  --text-muted:     #64748b;
+  --text-inverted:  #ffffff;
+
+  /* Severity colors (RFC 5424) */
+  --sev-0: #7c3aed;  /* Emergency */
+  --sev-1: #9333ea;  /* Alert */
+  --sev-2: #dc2626;  /* Critical */
+  --sev-3: #ea580c;  /* Error */
+  --sev-4: #d97706;  /* Warning */
+  --sev-5: #2563eb;  /* Notice */
+  --sev-6: #475569;  /* Info */
+  --sev-7: #94a3b8;  /* Debug */
+
+  /* Layout */
+  --sidebar-width:  280px;
+  --header-height:  52px;
+  --radius:         5px;
+  --shadow:         0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+
+  /* Typography */
+  --font-ui:   'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', Menlo, monospace;
+}
+
+[data-theme="dark"] {
+  /* Brand — dark logo variants */
+  --color-primary:  #06b6d4;
+  --color-accent:   #facc15;
+  --color-neutral:  #94a3b8;
+
+  /* Dark theme surfaces */
+  --bg:             #0b1220;
+  --bg-surface:     #111827;
+  --bg-hover:       #1e2a3a;
+  --bg-selected:    #0c2a3d;
+  --border:         #1e293b;
+  --text:           #e2e8f0;
+  --text-muted:     #94a3b8;
+  --text-inverted:  #0b1220;
+}
+
+/* ============================================================
+   Reset & base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #app {
+  height: 100%;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  transition: background .2s, color .2s;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--color-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* ============================================================
+   Scrollbar — subtle across the app
+   ============================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================================
+   Utility classes
+   ============================================================ */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+.mono { font-family: var(--font-mono); }
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: .375rem;
+  padding: .375rem .75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: .875rem; font-weight: 500;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, filter .15s, opacity .15s;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+.btn-ghost:hover:not(:disabled) { background: var(--bg-hover); }
+
+.btn-danger {
+  background: #dc2626;
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* ── Severity badges ──────────────────────────────────────── */
+.sev-badge {
+  display: inline-block;
+  padding: .1rem .4rem;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: #fff;
+}
+.sev-0 { background: var(--sev-0); }
+.sev-1 { background: var(--sev-1); }
+.sev-2 { background: var(--sev-2); }
+.sev-3 { background: var(--sev-3); }
+.sev-4 { background: var(--sev-4); }
+.sev-5 { background: var(--sev-5); }
+.sev-6 { background: var(--sev-6); }
+.sev-7 { background: var(--sev-7); color: var(--text); }
+
+/* ============================================================
+   Custom checkboxes — minimal, modern, theme-aware
+   ============================================================ */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background .12s, border-color .12s, box-shadow .12s;
+  vertical-align: middle;
+  outline: none;
+}
+input[type="checkbox"]:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+input[type="checkbox"]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  border-color: var(--color-primary);
+}
+input[type="checkbox"]:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: white;
+  clip-path: polygon(20% 45%, 10% 58%, 42% 85%, 90% 22%, 78% 12%, 42% 60%);
+}
+input[type="checkbox"]:indeterminate {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+input[type="checkbox"]:indeterminate::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 19%;
+  right: 19%;
+  height: 2px;
+  background: white;
+  border-radius: 1px;
+  transform: translateY(-50%);
+}

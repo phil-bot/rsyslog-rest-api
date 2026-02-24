@@ -1,21 +1,30 @@
 # API Reference
 
-Complete API documentation for rsyslog REST API v0.3.0.
+Complete API documentation for rsyslox v0.4.0.
 
 ## Authentication
 
-All protected endpoints require an API key:
+Two authentication methods are available depending on the use case:
 
-```http
-X-API-Key: your-api-key-here
-```
+| Method | Header | Access |
+|---|---|---|
+| Admin session token | `X-Session-Token: <token>` | Full access to all endpoints |
+| Read-only API key | `X-API-Key: <key>` | `/api/logs` and `/api/meta` only |
 
-**Example:**
+**Obtain an admin session token:**
 ```bash
-curl -H "X-API-Key: a3d7f8c9..." "http://localhost:8000/logs"
+curl -X POST http://localhost:8000/api/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"password": "your-admin-password"}'
+# Response: {"token": "<session-token>"}
 ```
 
-?> **Development:** If `API_KEY` in `.env` is empty, authentication is disabled.
+**Create a read-only API key:** Admin panel → API Keys → Create. Keys are shown once in plaintext at creation time.
+
+**Example request:**
+```bash
+curl -H "X-API-Key: your-key" "http://localhost:8000/api/logs?limit=5"
+```
 
 ## Base URL
 
@@ -23,7 +32,7 @@ curl -H "X-API-Key: a3d7f8c9..." "http://localhost:8000/logs"
 http://localhost:8000
 ```
 
-Or with custom host/port from configuration.
+Or with your configured host/port.
 
 ---
 
@@ -36,11 +45,9 @@ rsyslog changed how it populates the `Priority` database column depending on ver
 | < 8.2204.0 (legacy) | Severity only (0–7) |
 | ≥ 8.2204.0 (modern) | RFC PRI = `Facility × 8 + Severity` |
 
-The API detects the storage format automatically at startup by sampling the oldest
-and newest non-kernel entries. Mixed datasets (produced by a rsyslog upgrade) are
-handled correctly on a per-row basis.
+The API detects the storage format automatically at startup by sampling the oldest and newest non-kernel entries. Mixed datasets (produced by a rsyslog upgrade) are handled correctly on a per-row basis.
 
-**API response fields are always RFC-5424 compliant**, regardless of the rsyslog version:
+**API response fields are always RFC-5424 compliant**, regardless of rsyslog version:
 
 | Field | Description | Example |
 |---|---|---|
@@ -56,9 +63,8 @@ handled correctly on a per-row basis.
 
 ### GET /health
 
-Health check endpoint (no authentication required).
+Health check — no authentication required.
 
-**Request:**
 ```bash
 curl http://localhost:8000/health
 ```
@@ -68,7 +74,8 @@ curl http://localhost:8000/health
 {
   "status": "healthy",
   "database": "connected",
-  "timestamp": "2025-02-15T10:30:00Z"
+  "version": "v0.4.0",
+  "timestamp": "2026-02-23T10:30:00Z"
 }
 ```
 
@@ -77,36 +84,34 @@ curl http://localhost:8000/health
 {
   "status": "unhealthy",
   "database": "disconnected",
-  "timestamp": "2025-02-15T10:30:00Z"
+  "version": "v0.4.0",
+  "timestamp": "2026-02-23T10:30:00Z"
 }
 ```
 
 ---
 
-### GET /logs
+### GET /api/logs
 
 Retrieve log entries with filtering and pagination.
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+|---|---|---|---|
 | `offset` | Integer | 0 | Skip N entries |
-| `limit` | Integer | 10 | Max results (max: 1000) |
-| `start_date` | DateTime | -24h | Start datetime (ISO 8601) |
-| `end_date` | DateTime | now | End datetime (ISO 8601) |
-| `FromHost` | String | - | Filter by hostname (multi-value) |
-| `Severity` | Integer | - | Filter by severity 0-7 (multi-value) |
-| `Priority` | Integer | - | Deprecated alias for `Severity` |
-| `Facility` | Integer | - | Filter by facility 0-23 (multi-value) |
-| `Message` | String | - | Text search (multi-value, OR) |
-| `SysLogTag` | String | - | Filter by syslog tag (multi-value) |
+| `limit` | Integer | 10 | Max results (max: 50 000 in show-all mode) |
+| `start_date` | DateTime | −24 h | Start datetime (ISO 8601 / RFC 3339) |
+| `end_date` | DateTime | now | End datetime (ISO 8601 / RFC 3339) |
+| `FromHost` | String | — | Filter by hostname (repeatable) |
+| `Severity` | Integer | — | Filter by severity 0–7 (repeatable) |
+| `Priority` | Integer | — | Deprecated alias for `Severity` |
+| `Facility` | Integer | — | Filter by facility 0–23 (repeatable) |
+| `Message` | String | — | Text search in message field (repeatable = OR) |
+| `SysLogTag` | String | — | Filter by syslog tag (repeatable) |
 
-**Multi-Value Support:**
-
-Repeat parameter for multiple values:
-
-```bash
+**Repeatable parameters** — repeat to filter by multiple values (OR logic):
+```
 ?Severity=3&Severity=4
 ?FromHost=web01&FromHost=web02
 ```
@@ -114,42 +119,31 @@ Repeat parameter for multiple values:
 **Severity Values (RFC-5424):**
 
 | Value | Label | Description |
-|-------|-------|-------------|
+|---|---|---|
 | 0 | Emergency | System unusable |
-| 1 | Alert | Action required immediately |
+| 1 | Alert | Immediate action required |
 | 2 | Critical | Critical conditions |
 | 3 | Error | Error conditions |
 | 4 | Warning | Warning conditions |
 | 5 | Notice | Normal but significant |
-| 6 | Informational | Informational |
+| 6 | Informational | Informational messages |
 | 7 | Debug | Debug messages |
 
-**Examples:**
-
+**Example requests:**
 ```bash
 # Latest 10 logs
-curl -H "X-API-Key: $KEY" "http://localhost:8000/logs?limit=10"
+curl -H "X-API-Key: $KEY" "http://localhost:8000/api/logs?limit=10"
 
 # Errors from last hour
-START=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Severity=3&start_date=$START"
+START=$(date -u -d "1 hour ago" "+%Y-%m-%dT%H:%M:%SZ")
+curl -H "X-API-Key: $KEY" "http://localhost:8000/api/logs?Severity=3&start_date=$START"
 
-# Multiple hosts
+# Errors and warnings from multiple hosts
 curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?FromHost=web01&FromHost=web02&FromHost=db01"
-
-# Errors AND warnings
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?Severity=3&Severity=4"
-
-# Combined filters
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/logs?FromHost=web01&Severity=3&limit=20"
+  "http://localhost:8000/api/logs?FromHost=web01&FromHost=web02&Severity=3&Severity=4"
 ```
 
 **Response (200 OK):**
-
 ```json
 {
   "total": 1234,
@@ -158,9 +152,8 @@ curl -H "X-API-Key: $KEY" \
   "rows": [
     {
       "ID": 12345,
-      "CustomerID": 42,
-      "ReceivedAt": "2025-02-15T10:30:15Z",
-      "DeviceReportedTime": "2025-02-15T10:30:13Z",
+      "ReceivedAt": "2026-02-23T10:30:15Z",
+      "DeviceReportedTime": "2026-02-23T10:30:13Z",
       "Facility": 3,
       "Facility_Label": "daemon",
       "Priority": 25,
@@ -169,45 +162,26 @@ curl -H "X-API-Key: $KEY" \
       "FromHost": "webserver01",
       "Message": "Connection timeout to database",
       "SysLogTag": "nginx",
+      "CustomerID": 42,
       "EventSource": "web-service",
       "EventUser": "www-data",
-      "EventID": 504,
-      "EventCategory": 5,
-      "NTSeverity": 3000,
-      "Importance": 4,
-      "SystemID": 1,
-      "InfoUnitID": 2
+      "EventID": 504
     }
   ]
 }
 ```
 
-**Response Fields:**
-
-Core fields (always present):
-- `ID` - Log entry ID
-- `ReceivedAt` - Time received by rsyslog
-- `FromHost` - Source hostname
-- `Priority` - RFC PRI value (`Facility × 8 + Severity`)
-- `Severity` / `Severity_Label` - RFC severity (0–7) with label
-- `Facility` / `Facility_Label` - RFC facility with label
-- `Message` - Log message
-
-Extended fields (when available):
-- `CustomerID`, `DeviceReportedTime`, `SysLogTag`
-- `EventSource`, `EventUser`, `EventID`, `EventCategory`
-- `NTSeverity`, `Importance`, `SystemID`, `InfoUnitID`
-- More... (25+ total fields)
+Core fields always present: `ID`, `ReceivedAt`, `FromHost`, `Priority`, `Severity`, `Severity_Label`, `Facility`, `Facility_Label`, `Message`.
+Extended fields (25+ total) populated when available: `CustomerID`, `DeviceReportedTime`, `SysLogTag`, `EventSource`, `EventUser`, `EventID`, `EventCategory`, `NTSeverity`, `Importance`, `SystemID`, `InfoUnitID`.
 
 ---
 
-### GET /meta
+### GET /api/meta
 
-List all available columns.
+List all available column names.
 
-**Request:**
 ```bash
-curl -H "X-API-Key: $KEY" "http://localhost:8000/meta"
+curl -H "X-API-Key: $KEY" "http://localhost:8000/api/meta"
 ```
 
 **Response:**
@@ -217,79 +191,74 @@ curl -H "X-API-Key: $KEY" "http://localhost:8000/meta"
     "ID", "CustomerID", "ReceivedAt", "DeviceReportedTime",
     "Facility", "Priority", "FromHost", "Message", "NTSeverity",
     "Importance", "EventSource", "EventUser", "EventCategory",
-    "EventID", "SysLogTag", "InfoUnitID", "SystemID",
-    "Severity"
+    "EventID", "SysLogTag", "InfoUnitID", "SystemID", "Severity"
   ],
-  "usage": "GET /meta/{column} to get distinct values for a column"
+  "usage": "GET /api/meta/{column} to get distinct values for a column"
 }
 ```
 
-?> **Note:** `Severity` is a virtual column — it is computed from the `Priority` column
-at query time and is not a physical database column.
+?> **Note:** `Severity` is a virtual column computed from `Priority MOD 8` — it is not a physical database column.
 
 ---
 
-### GET /meta/{column}
+### GET /api/meta/{column}
 
-Get distinct values for a column across **all data** (no default time filter).
+Get distinct values for a column. No default time filter is applied — without parameters, returns values from the **entire dataset**.
 
-**Key behavior:**
-- Without any filters: returns all distinct values from the entire dataset.
-- Filters are **optional** and narrow the result set when provided.
-- Unlike `/logs`, **no default date range is applied**.
-
-**Query Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `start_date` | DateTime | **none** | Optional start datetime (ISO 8601). No default. |
-| `end_date` | DateTime | **none** | Optional end datetime (ISO 8601). No default. |
-| `FromHost` | String | - | Filter by hostname (multi-value) |
-| `Severity` | Integer | - | Filter by severity 0-7 (multi-value) |
-| `Priority` | Integer | - | Deprecated alias for `Severity` |
-| `Facility` | Integer | - | Filter by facility 0-23 (multi-value) |
-| `Message` | String | - | Text search (multi-value, OR) |
-| `SysLogTag` | String | - | Filter by syslog tag (multi-value) |
+**Query Parameters:** Same as `/api/logs` (all optional).
 
 **Examples:**
-
 ```bash
 # All distinct hosts (entire dataset)
-curl -H "X-API-Key: $KEY" "http://localhost:8000/meta/FromHost"
+curl -H "X-API-Key: $KEY" "http://localhost:8000/api/meta/FromHost"
 
-# All severity values with labels (virtual column)
-curl -H "X-API-Key: $KEY" "http://localhost:8000/meta/Severity"
+# Severity levels with labels
+curl -H "X-API-Key: $KEY" "http://localhost:8000/api/meta/Severity"
 
-# Hosts that logged errors
+# Hosts that had errors in a specific window
 curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/meta/FromHost?Severity=3&Severity=4"
-
-# SysLogTags from specific hosts
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/meta/SysLogTag?FromHost=web01&FromHost=web02"
-
-# Hosts with errors in a specific time window
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/meta/FromHost?Severity=3&start_date=2025-02-01T00:00:00Z&end_date=2025-02-15T23:59:59Z"
+  "http://localhost:8000/api/meta/FromHost?Severity=3&start_date=2026-02-01T00:00:00Z"
 ```
 
-**Response (`Severity` or `Facility` — with labels):**
+**Response for `Severity` or `Facility` (with labels):**
 ```json
 [
-  { "val": 1, "label": "Alert" },
-  { "val": 3, "label": "Error" },
-  { "val": 6, "label": "Informational" }
+  {"val": 3, "label": "Error"},
+  {"val": 4, "label": "Warning"},
+  {"val": 6, "label": "Informational"}
 ]
 ```
 
-**Response (Integer columns):**
-```json
-[1, 2, 5, 10, 42]
-```
-
-**Response (String columns):**
+**Response for string columns:**
 ```json
 ["webserver01", "webserver02", "dbserver01"]
+```
+
+**Response for integer columns:**
+```json
+[1, 2, 5, 10]
+```
+
+---
+
+### POST /api/admin/login
+
+Obtain an admin session token.
+
+```bash
+curl -X POST http://localhost:8000/api/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"password": "your-admin-password"}'
+```
+
+**Response (200 OK):**
+```json
+{"token": "<session-token>"}
+```
+
+Use the token in subsequent requests:
+```bash
+curl -H "X-Session-Token: <token>" "http://localhost:8000/api/admin/config"
 ```
 
 ---
@@ -297,58 +266,24 @@ curl -H "X-API-Key: $KEY" \
 ## HTTP Status Codes
 
 | Code | Meaning |
-|------|---------|
-| 200 | OK - Success |
-| 400 | Bad Request - Invalid parameters |
-| 401 | Unauthorized - API key missing/invalid |
+|---|---|
+| 200 | OK |
+| 400 | Bad Request — invalid parameters |
+| 401 | Unauthorized — missing or invalid credentials |
 | 500 | Internal Server Error |
-| 503 | Service Unavailable - Database down |
+| 503 | Service Unavailable — database unreachable |
 
 ## Rate Limiting
 
-Currently **no** built-in rate limiting.
+No built-in rate limiting. Use a reverse proxy (nginx/Apache) for rate limiting in production — see [Deployment Guide](../guides/deployment.md).
 
-!> **Production:** Use reverse proxy (nginx/Apache) for rate limiting.
+## What's New in v0.4.0
 
-## Best Practices
-
-**Performance:**
-- Always set `limit` parameter on `/logs`
-- Use smaller time windows on `/logs`
-- Paginate large results
-- Filter on indexed fields
-- Cache `/meta` responses — they cover the full dataset and change slowly
-
-**Security:**
-- Use HTTPS in production
-- Rotate API keys regularly
-- Restrict CORS origins
-- Implement rate limiting
-
-**Reliability:**
-- Check `/health` before queries
-- Handle errors gracefully
-- Implement retry logic
-- Monitor API availability
-
-## What's New in v0.3.0
-
-- ✅ `Severity` is now the correct RFC-5424 field (0–7), exposed in all log responses
-- ✅ `Priority` in responses now contains the true RFC PRI value (`Facility × 8 + Severity`)
-- ✅ Automatic detection of rsyslog Priority column format (legacy / modern / mixed)
-- ✅ Mixed datasets (before/after rsyslog upgrade) are handled correctly per row
-- ✅ `?Severity=` filter parameter introduced; `?Priority=` kept as deprecated alias
-- ✅ `/meta/Severity` virtual column returns distinct severity values with labels
-
-## What's New in v0.2.4
-
-- ✅ `/meta/{column}` returns all distinct values without a default time filter
-
-## What's New in v0.2.3
-
-- ✅ Improved multi-value filter performance
-- ✅ Better error validation messages
-- ✅ Enhanced meta endpoint filtering
-- ✅ Bug fixes and stability improvements
+- ✅ Web UI — full-featured log viewer embedded in the binary
+- ✅ Admin session token authentication (`X-Session-Token`)
+- ✅ Named, revocable read-only API keys (replaces single `API_KEY`)
+- ✅ API paths prefixed with `/api/` (e.g. `/api/logs`, `/api/meta`)
+- ✅ Interactive API documentation at `/docs`
+- ✅ TOML configuration — no more `.env` file
 
 [View Full Changelog](../development/changelog.md)

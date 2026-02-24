@@ -1,239 +1,219 @@
 # Troubleshooting Guide
 
-Common issues and solutions.
-
 ## Quick Diagnosis
 
 ```bash
-# Check API status
-sudo systemctl status rsyslog-rest-api
+# Service status
+sudo systemctl status rsyslox
 
-# View logs
-sudo journalctl -u rsyslog-rest-api -n 50
+# Recent logs
+sudo journalctl -u rsyslox -n 100
 
-# Test database
-mysql -u rsyslog -p Syslog -e "SELECT COUNT(*) FROM SystemEvents"
-
-# Test API
+# Health check
 curl http://localhost:8000/health
+
+# Database connectivity test
+mysql -u rsyslox -p Syslog -e "SELECT COUNT(*) FROM SystemEvents"
 ```
+
+---
 
 ## Common Issues
 
-### API Won't Start
+### Service Won't Start
 
-**Symptoms:**
-- Service fails to start
-- `sudo systemctl status` shows "failed"
-
-**Solutions:**
+**Symptoms:** `systemctl status rsyslox` shows "failed"
 
 ```bash
-# Check logs
-sudo journalctl -u rsyslog-rest-api -n 100
+# View detailed error
+sudo journalctl -u rsyslox -n 50
 
 # Common causes:
-# 1. Database connection failed
-mysql -u rsyslog -p Syslog  # Test manually
 
-# 2. Port already in use
+# 1. Configuration missing or invalid
+ls -la /etc/rsyslox/config.toml
+# If missing: binary starts in setup wizard mode (normal for first install)
+
+# 2. Database unreachable
+mysql -u rsyslox -p Syslog   # Test manually
+
+# 3. Port already in use
 sudo lsof -i :8000
 
-# 3. Permission denied on .env
-sudo chmod 600 /opt/rsyslog-rest-api/.env
+# 4. Binary not executable
+ls -la /opt/rsyslox/rsyslox
+sudo chmod +x /opt/rsyslox/rsyslox
+```
 
-# 4. Binary not found
-ls -la /opt/rsyslog-rest-api/rsyslog-rest-api
+### Setup Wizard Not Accessible
+
+The wizard is served on `http://localhost:8000` and is **only accessible from localhost** until configured. If you're on a remote machine:
+
+```bash
+# SSH tunnel from your workstation
+ssh -L 8000:localhost:8000 user@yourserver
+# Then open http://localhost:8000 locally
 ```
 
 ### Database Connection Failed
 
-**Error:** `failed to ping database`
-
-**Solutions:**
+**Log message:** `Failed to connect to database`
 
 ```bash
 # 1. Check database is running
 sudo systemctl status mysql
 
-# 2. Test credentials
-mysql -u rsyslog -p Syslog
+# 2. Test credentials manually
+mysql -h localhost -u rsyslox -p Syslog
 
-# 3. Check .env file
-cat /opt/rsyslog-rest-api/.env | grep DB_
+# 3. Verify the database and table exist
+mysql -u root -p -e "SHOW DATABASES; USE Syslog; SHOW TABLES;"
 
-# 4. Verify database exists
-mysql -e "SHOW DATABASES"
-
-# 5. Check user permissions
-mysql -e "SHOW GRANTS FOR 'rsyslog'@'localhost'"
+# 4. Re-run setup if credentials changed
+# Delete config and restart → triggers setup wizard again
+sudo systemctl stop rsyslox
+sudo rm /etc/rsyslox/config.toml
+sudo systemctl start rsyslox
+# Then open http://localhost:8000 to redo setup
 ```
 
-### API Key Issues
+### Authentication Issues
 
-**Error:** `Invalid or missing API key`
-
-**Solutions:**
-
+**Admin panel won't accept password:**
+- Verify Caps Lock
+- If you've forgotten the password, reset it:
 ```bash
-# 1. Check API key in .env
-grep "^API_KEY=" /opt/rsyslog-rest-api/.env
-
-# 2. Verify header format
-curl -H "X-API-Key: your-key" ...  # Correct
-curl -H "API-Key: your-key" ...    # Wrong!
-
-# 3. Check for spaces
-# Wrong: API_KEY= abc123 (has space)
-# Right: API_KEY=abc123
+/opt/rsyslox/rsyslox hash-password "yournewpassword"
+# Copy the output, edit /etc/rsyslox/config.toml:
+# admin_password_hash = "<paste>"
+sudo systemctl restart rsyslox
 ```
 
-### No Logs Returned
-
-**Symptoms:**
-- API works but returns 0 logs
-- `"total": 0`
-
-**Solutions:**
-
+**API key rejected (`401 Unauthorized`):**
 ```bash
-# 1. Check database has data
-mysql Syslog -e "SELECT COUNT(*) FROM SystemEvents"
+# Check header format — must be exactly:
+curl -H "X-API-Key: your-plaintext-key" ...
 
-# 2. Check time range
-# Default is last 24 hours
-# Try: ?start_date=2020-01-01T00:00:00Z
-
-# 3. Remove all filters
-curl ... /logs?limit=10  # No filters
-
-# 4. Check column names
-# Wrong: ?Host=web01
-# Right: ?FromHost=web01
+# Not:
+curl -H "API-Key: ..." ...
+curl -H "Authorization: Bearer ..." ...
 ```
 
-### SSL/TLS Problems
+If the key was revoked in Admin → API Keys, create a new one.
 
-**Error:** `SSL certificate not found`
+**Session expired (redirect loop to /login):**
+- Clear `sessionStorage` in your browser's DevTools and reload, or open a private window
 
-**Solutions:**
+### No Logs in the UI
+
+**Symptoms:** Table is empty, total shows 0
 
 ```bash
-# 1. Check certificate files exist
-ls -la /opt/rsyslog-rest-api/certs/
+# 1. Verify the database has data
+mysql -u rsyslox -p Syslog -e "SELECT COUNT(*) FROM SystemEvents"
 
-# 2. Check paths in .env
-SSL_CERTFILE=/correct/path/to/cert.pem
-SSL_KEYFILE=/correct/path/to/key.pem
+# 2. Check the time range — default is last 1h
+# Extend it in the filter panel (try 24h or 7d)
 
-# 3. Test certificate
-openssl x509 -in cert.pem -text -noout
+# 3. Remove all active filters
+# Click "Reset" in the filter panel
 
-# 4. For development, disable SSL
-USE_SSL=false
+# 4. Verify rsyslog is writing to the database
+tail -f /var/log/syslog   # Should show new entries
+mysql -u rsyslox -p Syslog -e "SELECT ReceivedAt FROM SystemEvents ORDER BY ReceivedAt DESC LIMIT 5"
 ```
 
-### CORS Errors
-
-**Error:** Browser shows CORS policy error
-
-**Solutions:**
+### Filters Not Working
 
 ```bash
-# 1. Check ALLOWED_ORIGINS
-ALLOWED_ORIGINS=https://your-domain.com
+# ❌ Wrong: comma-separated multi-value
+?FromHost=web01,web02
 
-# 2. For development
-ALLOWED_ORIGINS=*
+# ✅ Correct: repeat the parameter
+?FromHost=web01&FromHost=web02
 
-# 3. Multiple origins (comma-separated)
-ALLOWED_ORIGINS=https://app1.com,https://app2.com
+# ❌ Wrong: lowercase parameter
+?fromhost=web01
 
-# 4. Restart after changes
-sudo systemctl restart rsyslog-rest-api
+# ✅ Correct: CamelCase
+?FromHost=web01
+
+# ❌ Wrong: Priority (deprecated)
+?Priority=3
+
+# ✅ Correct: Severity
+?Severity=3
+```
+
+### SSL Certificate Errors
+
+```bash
+# Verify certificate file exists and is readable
+ls -la /etc/rsyslox/certs/
+sudo openssl x509 -in /etc/rsyslox/certs/cert.pem -text -noout | head -20
+
+# Verify key permissions
+sudo chmod 600 /etc/rsyslox/certs/key.pem
+sudo chown rsyslox:rsyslox /etc/rsyslox/certs/key.pem
+
+# Restart after fixing
+sudo systemctl restart rsyslox
 ```
 
 ### Performance Issues
 
-**Symptoms:**
-- Slow responses (>1s)
-- High CPU/memory
-
-**Solutions:**
+**Slow queries:**
 
 ```bash
-# 1. Check database performance
-mysql -e "SHOW PROCESSLIST"
+# Check database indexes
+mysql -u rsyslox -p Syslog -e "SHOW INDEX FROM SystemEvents"
 
-# 2. Add indexes
-# See: performance.md
-
-# 3. Reduce query size
-?limit=100  # Instead of limit=10000
-
-# 4. Optimize time range
-# Last hour instead of last 30 days
-
-# 5. Check system resources
-htop
-iostat -x 1
+# Narrow the time window in your query — start with 1h, not 30d
+# Reduce limit parameter: ?limit=100 instead of ?limit=10000
 ```
+
+See [Performance Guide → Database Indexes](performance.md#database-indexes) for the recommended index definitions.
+
+### Config File Issues
+
+If the config file was corrupted or manually edited incorrectly, rsyslox will fail to start with a parse error in the journal. Re-run setup:
+
+```bash
+sudo systemctl stop rsyslox
+sudo cp /etc/rsyslox/config.toml /etc/rsyslox/config.toml.bak
+sudo rm /etc/rsyslox/config.toml
+sudo systemctl start rsyslox
+# Complete setup wizard at http://localhost:8000
+```
+
+---
 
 ## FAQ
 
-### How do I reset the API key?
+### How do I access the API docs?
 
-```bash
-# Generate new key
-NEW_KEY=$(openssl rand -hex 32)
+Navigate to `http://<host>:8000/docs` — interactive Redoc documentation is served directly from the binary.
 
-# Update .env
-sudo sed -i "s/^API_KEY=.*/API_KEY=$NEW_KEY/" /opt/rsyslog-rest-api/.env
+### Can rsyslox run without internet access?
 
-# Restart
-sudo systemctl restart rsyslog-rest-api
-```
+Yes — all assets (frontend, API docs, Redoc) are embedded in the binary. No CDN or external resources are required at runtime.
 
-### How do I enable debug logging?
+### How do I change the admin password?
 
-```bash
-# Check current logs
-sudo journalctl -u rsyslog-rest-api -f
+See [Authentication Issues → Admin panel won't accept password](#authentication-issues) above.
 
-# For more details, start in foreground
-sudo systemctl stop rsyslog-rest-api
-cd /opt/rsyslog-rest-api
-./rsyslog-rest-api  # Shows all logs
-```
+### Can I run multiple instances?
 
-### Why are my filters not working?
+Yes — each instance needs its own config file path. Use the `RSYSLOX_CONFIG` environment variable to override the default path `/etc/rsyslox/config.toml`.
 
-```bash
-# Common mistakes:
+### Does rsyslox support PostgreSQL?
 
-# ❌ Wrong: Comma-separated
-?FromHost=web01,web02
+Currently only MySQL/MariaDB is supported.
 
-# ✅ Right: Repeat parameter
-?FromHost=web01&FromHost=web02
-
-# ❌ Wrong: Lowercase
-?fromhost=web01
-
-# ✅ Right: CamelCase
-?FromHost=web01
-```
-
-### How do I upgrade to a new version?
-
-See [Deployment: Maintenance](deployment.md#maintenance)
-
-### Can I use this with PostgreSQL?
-
-Currently only MySQL/MariaDB is supported. PostgreSQL support is planned for future versions.
+---
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/phil-bot/rsyslog-rest-api/issues)
-- [GitHub Discussions](https://github.com/phil-bot/rsyslog-rest-api/discussions)
-- Check logs: `sudo journalctl -u rsyslog-rest-api -n 100`
+- **Logs:** `sudo journalctl -u rsyslox -n 200`
+- **Issues:** [GitHub Issues](https://github.com/phil-bot/rsyslox/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/phil-bot/rsyslox/discussions)

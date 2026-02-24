@@ -8,37 +8,49 @@
 [![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/phil-bot/rsyslox)](https://github.com/phil-bot/rsyslox/releases)
 
-rsyslox is a lightweight, high-performance REST API for accessing rsyslog data stored in MySQL/MariaDB. It exposes the `SystemEvents` table via a clean HTTP/JSON interface with filtering, pagination, and metadata queries — making it easy to integrate syslog data into dashboards, monitoring tools, or custom scripts.
+rsyslox is a self-hosted syslog viewer for rsyslog data stored in MySQL/MariaDB. It provides a full-featured web UI for browsing, filtering, and exporting log entries — alongside a clean REST API for integrating syslog data into dashboards, monitoring tools, or custom scripts.
 
-Written in Go, it is designed to run as a standalone binary with minimal dependencies.
-
-## 📖 Documentation
-
-**[https://rsyslox.grothu.net](https://rsyslox.grothu.net)**
+A single binary embeds the frontend, API documentation, and all required assets. No config files need to be edited manually.
 
 ## 🚀 Quick Start
 
 ```bash
 # Download latest release
 wget https://github.com/phil-bot/rsyslox/releases/latest/download/rsyslox-linux-amd64
-
-# Install
 chmod +x rsyslox-linux-amd64
-sudo mv rsyslox-linux-amd64 /usr/local/bin/rsyslox
 
-# Create configuration
-cat > .env << EOF
-API_KEY=$(openssl rand -hex 32)
-DB_HOST=localhost
-DB_NAME=Syslog
-DB_USER=rsyslog
-DB_PASS=your-password
-EOF
+# Install (creates system user, registers systemd service)
+sudo ./install.sh
 
-# Run
-rsyslox
+# Open the setup wizard in your browser
+# http://localhost:8000
 ```
+
+The setup wizard walks you through database credentials, admin password, and server settings. rsyslox writes its own configuration — no manual config file editing required.
+
+## ✨ Features
+
+**Web UI**
+- Log viewer with real-time filtering: time range, severity, facility, host, tag, message search
+- Auto-refresh with configurable interval
+- Dark / light theme, English / Deutsch, adjustable font size, 12h / 24h clock
+- Multi-row selection, CSV / JSON export
+- Detail panel with full field view and raw JSON
+
+**Admin Panel**
+- Server settings, database info, log cleanup configuration
+- Named, revocable read-only API keys
+- Browser-persisted preferences (no restart required)
+
+**API**
+- REST API with filtering, pagination, and metadata queries
+- Two authentication methods: admin session token or read-only API key
+- Interactive API documentation at `/docs`
+
+## 📖 Documentation
+
+**[https://rsyslox.grothu.net](https://rsyslox.grothu.net)**
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](https://github.com/phil-bot/rsyslox/blob/main/LICENSE) for details.

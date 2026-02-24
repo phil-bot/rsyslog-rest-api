@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-// Builder constructs SQL WHERE clauses and arguments for filtering
+// Builder constructs SQL WHERE clauses and arguments for filtering.
 type Builder struct {
 	conditions []string
 	args       []interface{}
 }
 
-// New creates a new filter builder
+// New creates a new filter builder.
 func New() *Builder {
 	return &Builder{
 		conditions: []string{},
@@ -20,30 +20,23 @@ func New() *Builder {
 	}
 }
 
-// AddDateRange adds a date range filter
+// AddDateRange adds a date range filter.
 func (b *Builder) AddDateRange(start, end time.Time) {
 	b.conditions = append(b.conditions, "ReceivedAt BETWEEN ? AND ?")
 	b.args = append(b.args, start, end)
 }
 
 // AddSeverityFilter adds a severity filter using Priority MOD 8.
-//
-// Using MOD 8 makes the filter universally correct regardless of whether the
-// database uses legacy format (Priority = Severity 0-7) or modern format
-// (Priority = RFC PRI = Facility*8 + Severity):
-//   - Legacy: Priority is already 0-7, so Priority MOD 8 = Priority ✓
-//   - Modern: Priority MOD 8 extracts the Severity component ✓
-//   - Mixed:  both cases are handled correctly by the same expression ✓
+// Works for both legacy (Priority = Severity 0-7) and modern
+// (Priority = Facility*8 + Severity) rsyslog formats.
 func (b *Builder) AddSeverityFilter(values []int) {
 	if len(values) == 0 {
 		return
 	}
-
 	placeholders := make([]string, len(values))
 	for i := range placeholders {
 		placeholders[i] = "?"
 	}
-
 	b.conditions = append(b.conditions,
 		fmt.Sprintf("Priority MOD 8 IN (%s)", strings.Join(placeholders, ",")))
 	for _, v := range values {
@@ -51,82 +44,61 @@ func (b *Builder) AddSeverityFilter(values []int) {
 	}
 }
 
-// AddMultiValueFilter adds a multi-value IN filter for a column
+// AddMultiValueFilter adds a multi-value IN filter for a column.
 func (b *Builder) AddMultiValueFilter(column string, values []interface{}) {
 	if len(values) == 0 {
 		return
 	}
-
 	placeholders := make([]string, len(values))
 	for i := range placeholders {
 		placeholders[i] = "?"
 	}
-
 	b.conditions = append(b.conditions,
 		fmt.Sprintf("%s IN (%s)", column, strings.Join(placeholders, ",")))
 	b.args = append(b.args, values...)
 }
 
-// AddStringMultiValue adds a multi-value string filter
+// AddStringMultiValue adds a multi-value string IN filter.
 func (b *Builder) AddStringMultiValue(column string, values []string) {
 	if len(values) == 0 {
 		return
 	}
-
-	interfaceValues := make([]interface{}, len(values))
+	ivals := make([]interface{}, len(values))
 	for i, v := range values {
-		interfaceValues[i] = v
+		ivals[i] = v
 	}
-
-	b.AddMultiValueFilter(column, interfaceValues)
+	b.AddMultiValueFilter(column, ivals)
 }
 
-// AddIntMultiValue adds a multi-value integer filter
+// AddIntMultiValue adds a multi-value integer IN filter.
 func (b *Builder) AddIntMultiValue(column string, values []int) {
 	if len(values) == 0 {
 		return
 	}
-
-	interfaceValues := make([]interface{}, len(values))
+	ivals := make([]interface{}, len(values))
 	for i, v := range values {
-		interfaceValues[i] = v
+		ivals[i] = v
 	}
-
-	b.AddMultiValueFilter(column, interfaceValues)
+	b.AddMultiValueFilter(column, ivals)
 }
 
-// AddMessageSearch adds a message search filter with OR logic for multiple terms
+// AddMessageSearch adds LIKE search on Message column; multiple terms use OR.
 func (b *Builder) AddMessageSearch(terms []string) {
 	if len(terms) == 0 {
 		return
 	}
-
-	messageConditions := []string{}
-	for _, term := range terms {
-		messageConditions = append(messageConditions, "Message LIKE ?")
+	conds := make([]string, len(terms))
+	for i, term := range terms {
+		conds[i] = "Message LIKE ?"
 		b.args = append(b.args, "%"+term+"%")
 	}
-
-	b.conditions = append(b.conditions,
-		fmt.Sprintf("(%s)", strings.Join(messageConditions, " OR ")))
+	b.conditions = append(b.conditions, "("+strings.Join(conds, " OR ")+")")
 }
 
-// Build returns the final WHERE clause and arguments
+// Build returns the WHERE clause and args. Returns "1=1" when no filters.
 func (b *Builder) Build() (string, []interface{}) {
 	if len(b.conditions) == 0 {
-		return "1=1", []interface{}{}
+		return "1=1", b.args
 	}
-
-	whereClause := strings.Join(b.conditions, " AND ")
-	return whereClause, b.args
-}
-
-// HasConditions returns true if any conditions have been added
-func (b *Builder) HasConditions() bool {
-	return len(b.conditions) > 0
-}
-
-// ConditionCount returns the number of conditions
-func (b *Builder) ConditionCount() int {
-	return len(b.conditions)
+	return strings.Join(b.conditions, " AND "), b.args
 }

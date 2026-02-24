@@ -1,0 +1,26 @@
+# Development configuration example.
+# Copy to config.dev.toml and fill in your local database credentials.
+# config.dev.toml is in .gitignore and will never be committed.
+#
+# Usage:  RSYSLOX_CONFIG=./config.dev.toml go run .
+#    or:  make dev
+
+[server]
+host                  = "127.0.0.1"
+port                  = 8000
+use_ssl               = false
+allowed_origins       = ["http://localhost:5173"]  # Vite dev server
+auto_refresh_interval = 30
+
+[database]
+host     = "localhost"
+port     = 3306
+name     = "Syslog"
+user     = "root"
+password = "yourpassword"   # plaintext is accepted in dev mode
+
+[auth]
+admin_password_hash = "$2a$12$changethis"  # use: go run . hash-password yourpassword
+
+[cleanup]
+enabled = false

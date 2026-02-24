@@ -1,276 +1,119 @@
 # Configuration
 
-Complete configuration reference for rsyslog REST API.
+All rsyslox settings are managed through the **Admin panel** at `/admin`. No manual config file editing is required.
 
-## Configuration File
+## Admin Panel
 
-The API uses environment variables loaded from a `.env` file.
+Navigate to `http://<host>:8000/admin` and log in with your admin password.
 
-**Location:** `/opt/rsyslog-rest-api/.env`
+### Server
 
-## Configuration Parameters
+| Setting | Description | Default |
+|---|---|---|
+| Bind host | Network interface to listen on (read-only after setup) | `0.0.0.0` |
+| Port | TCP port (read-only after setup) | `8000` |
+| CORS origins | Comma-separated allowed origins, `*` for all | `*` |
+| SSL | Enable HTTPS — requires cert and key files | off |
 
-### API Security
+### Database
 
-#### API_KEY
+Read-only view of the active database connection. Credentials are set once during setup and are not editable here.
 
-API key for authentication.
+### Cleanup
 
-```bash
-API_KEY=a3d7f8c9e2b4...
+Automatic deletion of old log entries when disk usage exceeds a threshold. → See [Cleanup Guide](../guides/cleanup.md).
+
+| Setting | Description | Default |
+|---|---|---|
+| Enabled | Toggle the cleanup service | off |
+| Disk path | Partition to monitor (usually the MySQL data dir) | `/var/lib/mysql` |
+| Threshold % | Delete entries when disk usage exceeds this | 85 % |
+| Batch size | Rows deleted per cleanup run | 1 000 |
+| Interval | Seconds between checks | 900 |
+
+### API Keys
+
+Named, revocable read-only API keys for external tools. Keys are shown in plaintext **once** at creation time — rsyslox stores only a SHA-256 hash. Pass a key via:
+
+```
+X-API-Key: <plaintext key>
 ```
 
-**Generate secure key:**
-```bash
-openssl rand -hex 32
+Read-only keys can access `/api/logs` and `/api/meta` only. They cannot access admin endpoints.
+
+### Preferences
+
+Browser-persisted settings stored in `localStorage`. Apply instantly without restart and are independent per browser.
+
+| Setting | Options | Default |
+|---|---|---|
+| Language | English, Deutsch | English |
+| Time format | 24-hour, 12-hour | 24-hour |
+| Font size | Small (13 px), Medium (14 px), Large (15 px) | Medium |
+| Auto-refresh interval | 5–300 s | 30 s |
+
+## Configuration File Reference
+
+`/etc/rsyslox/config.toml` is written by the setup wizard and updated by the Admin panel. Manual editing is not required. The file is shown here for reference only.
+
+```toml
+[server]
+host                  = "0.0.0.0"
+port                  = 8000
+use_ssl               = false
+ssl_cert              = "/etc/rsyslox/certs/cert.pem"
+ssl_key               = "/etc/rsyslox/certs/key.pem"
+allowed_origins       = ["*"]
+auto_refresh_interval = 30
+
+[database]
+host     = "localhost"
+port     = 3306
+name     = "Syslog"
+user     = "rsyslox"
+password = "enc:<base64>"   # AES-GCM encrypted by setup wizard
+
+[auth]
+admin_password_hash = "$2a$12$..."   # bcrypt hash
+
+[[auth.read_only_keys]]
+name     = "monitoring"
+key_hash = "<sha256 hex>"
+
+[cleanup]
+enabled           = false
+disk_path         = "/var/lib/mysql"
+threshold_percent = 85.0
+batch_size        = 1000
+interval          = "15m"
 ```
 
-**Important:** Always use a strong API key in production!
+### Security Model
 
-### Server Configuration
+| Value | Storage |
+|---|---|
+| Database password | AES-GCM encrypted; key derived from `/etc/machine-id` — not portable between machines |
+| Admin password | bcrypt hash (cost 12) |
+| API key plaintext | Never stored; only SHA-256 hex hash written to disk |
+| Config file | Mode `0640` — readable by `root` and group `rsyslox` only |
 
-#### SERVER_HOST
+### SSL
 
-Host address to bind to.
+Place a certificate and key at the paths defined in `ssl_cert` and `ssl_key` (default: `/etc/rsyslox/certs/`), then enable SSL in **Admin → Server**. rsyslox serves HTTPS on the same port.
 
+**Self-signed certificate (development):**
 ```bash
-SERVER_HOST=0.0.0.0  # Listen on all interfaces (default)
+sudo mkdir -p /etc/rsyslox/certs
+sudo openssl req -x509 -newkey rsa:4096 -nodes \
+  -keyout /etc/rsyslox/certs/key.pem \
+  -out /etc/rsyslox/certs/cert.pem \
+  -days 365 -subj "/CN=localhost"
 ```
 
-Options:
-- `0.0.0.0` - All interfaces (default)
-- `127.0.0.1` - Localhost only
-- `192.168.1.10` - Specific IP
-
-#### SERVER_PORT
-
-Port to listen on.
-
-```bash
-SERVER_PORT=8000  # Default: 8000
-```
-
-### Database Configuration
-
-#### Recommended: Environment Variables
-
-```bash
-DB_HOST=localhost
-DB_NAME=Syslog
-DB_USER=rsyslog
-DB_PASS=your-secure-password
-```
-
-**Benefits:**
-- ✅ Secure (no need to expose rsyslog config)
-- ✅ Flexible (different DB for API)
-- ✅ Clear separation of concerns
-
-#### Alternative: rsyslog Config
-
-If DB_* variables are not set, reads from rsyslog config:
-
-```bash
-RSYSLOG_CONFIG_PATH=/etc/rsyslog.d/mysql.conf
-```
-
-### SSL/TLS Configuration
-
-#### USE_SSL
-
-Enable SSL/TLS.
-
-```bash
-USE_SSL=false  # Default: false
-```
-
-Set to `true` for production with HTTPS.
-
-#### SSL_CERTFILE
-
-Path to SSL certificate.
-
-```bash
-SSL_CERTFILE=/opt/rsyslog-rest-api/certs/cert.pem
-```
-
-#### SSL_KEYFILE
-
-Path to SSL private key.
-
-```bash
-SSL_KEYFILE=/opt/rsyslog-rest-api/certs/key.pem
-```
-
-**Generate self-signed certificate (development):**
-```bash
-openssl req -x509 -newkey rsa:4096 -nodes \
-  -keyout key.pem -out cert.pem -days 365 \
-  -subj "/CN=localhost"
-```
-
-**Production:** Use Let's Encrypt certificates!
-
-### CORS Configuration
-
-#### ALLOWED_ORIGINS
-
-Allowed origins for CORS.
-
-```bash
-ALLOWED_ORIGINS=*  # Allow all (development only!)
-```
-
-**Production examples:**
-```bash
-# Single origin
-ALLOWED_ORIGINS=https://dashboard.example.com
-
-# Multiple origins (comma-separated)
-ALLOWED_ORIGINS=https://app1.com,https://app2.com
-```
-
-**Security:** Never use `*` in production!
-
-### Cleanup / Housekeeping
-
-Automatically deletes old log entries when disk usage exceeds a configurable threshold. Disabled by default.
-
-→ See [Cleanup Guide](../guides/cleanup.md) for details.
-
-#### CLEANUP_ENABLED
-
-Enables or disables the cleanup service.
-
-```bash
-CLEANUP_ENABLED=false  # Default: false
-```
-
-#### CLEANUP_DISK_PATH
-
-Filesystem path (mount point) to monitor for disk usage. Should point to the partition where MySQL/MariaDB stores its data.
-
-```bash
-CLEANUP_DISK_PATH=/var/lib/mysql  # Default
-```
-
-#### CLEANUP_THRESHOLD_PERCENT
-
-Maximum allowed disk usage in percent. When usage exceeds this value, the oldest records are deleted.
-
-```bash
-CLEANUP_THRESHOLD_PERCENT=85  # Default: 85
-```
-
-Valid range: `1`–`99`. Do not set too close to `100` — MySQL needs free space for internal operations.
-
-#### CLEANUP_BATCH_SIZE
-
-Number of records to delete per cleanup run.
-
-```bash
-CLEANUP_BATCH_SIZE=1000  # Default: 1000
-```
-
-Larger values free up space faster but create more database load per cycle.
-
-#### CLEANUP_INTERVAL
-
-How often the disk usage is checked. Uses Go duration format.
-
-```bash
-CLEANUP_INTERVAL=15m  # Default: 15m
-```
-
-Examples: `5m`, `15m`, `1h`, `30s`
-
-## Complete Example
-
-### Development Configuration
-
-```bash
-# .env (development)
-API_KEY=dev-key-12345
-SERVER_HOST=127.0.0.1
-SERVER_PORT=8000
-USE_SSL=false
-ALLOWED_ORIGINS=*
-
-DB_HOST=localhost
-DB_NAME=Syslog
-DB_USER=rsyslog
-DB_PASS=devpassword
-```
-
-### Production Configuration
-
-```bash
-# .env (production)
-API_KEY=a3d7f8c9e2b4a1c8f7e9d3b6a5c4e8f2
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
-USE_SSL=true
-SSL_CERTFILE=/etc/letsencrypt/live/api.example.com/fullchain.pem
-SSL_KEYFILE=/etc/letsencrypt/live/api.example.com/privkey.pem
-ALLOWED_ORIGINS=https://dashboard.example.com,https://monitoring.example.com
-
-DB_HOST=db.internal.example.com
-DB_NAME=Syslog
-DB_USER=rsyslog_api
-DB_PASS=strong-secure-password-here
-
-CLEANUP_ENABLED=true
-CLEANUP_DISK_PATH=/var/lib/mysql
-CLEANUP_THRESHOLD_PERCENT=85
-CLEANUP_BATCH_SIZE=1000
-CLEANUP_INTERVAL=15m
-```
-
-## File Permissions
-
-Secure your configuration:
-
-```bash
-# Restrict access to .env
-sudo chmod 600 /opt/rsyslog-rest-api/.env
-sudo chown root:root /opt/rsyslog-rest-api/.env
-```
-
-## Environment Variables Priority
-
-Configuration is loaded in this order:
-
-1. **Environment variables** (highest priority)
-2. **.env file**
-3. **Default values**
-
-Example:
-```bash
-# Override via environment
-export SERVER_PORT=9000
-rsyslog-rest-api  # Will use port 9000
-```
-
-## Validation
-
-Test your configuration:
-
-```bash
-# Start in foreground
-rsyslog-rest-api
-
-# Check logs
-sudo journalctl -u rsyslog-rest-api -n 50
-```
-
-Look for:
-- ✅ "Database connection established"
-- ✅ "Starting HTTP server on..."
-- ❌ Any error messages
+**Production:** Use Let's Encrypt certificates via Certbot — see [Deployment Guide](../guides/deployment.md).
 
 ## Next Steps
 
-- [Quick Start Tutorial](quick-start.md)
-- [Deploy to Production](../guides/deployment.md)
-- [Security Best Practices](../guides/security.md)
-- [Cleanup / Housekeeping](../guides/cleanup.md)
+- [Quick Start Guide](quick-start.md)
+- [Deployment Guide](../guides/deployment.md)
+- [Security Guide](../guides/security.md)
