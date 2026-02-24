@@ -133,7 +133,7 @@ header "Setting up configuration directory"
 mkdir -p "$CONFIG_DIR"
 # rsyslox user must be able to read config (written by setup wizard as root→rsyslox)
 chown root:"$SERVICE_GROUP" "$CONFIG_DIR"
-chmod 750 "$CONFIG_DIR"
+chmod 760 "$CONFIG_DIR"
 success "Config directory: $CONFIG_DIR (root:$SERVICE_GROUP, 750)"
 
 # ── Systemd service ───────────────────────────────────────────────────────────
