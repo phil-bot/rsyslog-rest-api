@@ -44,14 +44,25 @@ type CleanupView struct {
 }
 
 type ConfigUpdateRequest struct {
-	Server  *ServerUpdateRequest  `json:"server,omitempty"`
-	Cleanup *CleanupUpdateRequest `json:"cleanup,omitempty"`
+	Server   *ServerUpdateRequest   `json:"server,omitempty"`
+	Database *DatabaseUpdateRequest `json:"database,omitempty"`
+	Cleanup  *CleanupUpdateRequest  `json:"cleanup,omitempty"`
 }
 
 type ServerUpdateRequest struct {
+	Host                string   `json:"host,omitempty"`
+	Port                *int     `json:"port,omitempty"`
 	AllowedOrigins      []string `json:"allowed_origins,omitempty"`
 	AutoRefreshInterval *int     `json:"auto_refresh_interval,omitempty"`
 	UseSSL              *bool    `json:"use_ssl,omitempty"`
+}
+
+type DatabaseUpdateRequest struct {
+	Host     string `json:"host,omitempty"`
+	Port     *int   `json:"port,omitempty"`
+	Name     string `json:"name,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"` // plaintext; encrypted before saving
 }
 
 type CleanupUpdateRequest struct {
@@ -96,6 +107,17 @@ func (h *ConfigHandler) handlePatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s := req.Server; s != nil {
+		if s.Host != "" {
+			h.cfg.Server.Host = s.Host
+		}
+		if s.Port != nil {
+			if *s.Port < 1 || *s.Port > 65535 {
+				respondError(w, http.StatusBadRequest,
+					models.NewValidationError("port", "Must be between 1 and 65535"))
+				return
+			}
+			h.cfg.Server.Port = *s.Port
+		}
 		if len(s.AllowedOrigins) > 0 {
 			h.cfg.Server.AllowedOrigins = s.AllowedOrigins
 		}
@@ -109,6 +131,35 @@ func (h *ConfigHandler) handlePatch(w http.ResponseWriter, r *http.Request) {
 		}
 		if s.UseSSL != nil {
 			h.cfg.Server.UseSSL = *s.UseSSL
+		}
+	}
+
+	if d := req.Database; d != nil {
+		if d.Host != "" {
+			h.cfg.Database.Host = d.Host
+		}
+		if d.Port != nil {
+			if *d.Port < 1 || *d.Port > 65535 {
+				respondError(w, http.StatusBadRequest,
+					models.NewValidationError("database.port", "Must be between 1 and 65535"))
+				return
+			}
+			h.cfg.Database.Port = *d.Port
+		}
+		if d.Name != "" {
+			h.cfg.Database.Name = d.Name
+		}
+		if d.User != "" {
+			h.cfg.Database.User = d.User
+		}
+		if d.Password != "" {
+			encrypted, err := config.EncryptPassword(d.Password)
+			if err != nil {
+				respondError(w, http.StatusInternalServerError,
+					models.NewAPIError("INTERNAL_ERROR", "Failed to encrypt password"))
+				return
+			}
+			h.cfg.Database.Password = encrypted
 		}
 	}
 

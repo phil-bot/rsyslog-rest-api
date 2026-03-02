@@ -15,6 +15,7 @@ export const language            = ref(stored.language            ?? 'en')
 export const timeFormat          = ref(stored.timeFormat          ?? '24h')
 export const fontSize            = ref(stored.fontSize            ?? 'medium')  // 'small'|'medium'|'large'
 export const autoRefreshInterval = ref(stored.autoRefreshInterval ?? 30)        // seconds
+export const defaultTimeRange    = ref(stored.defaultTimeRange    ?? '1h')          // '15m'|'1h'|'6h'|'24h'|'7d'|'30d'
 
 // Apply font-size immediately on load
 applyFontSize(fontSize.value)
@@ -25,16 +26,17 @@ export function applyFontSize(size) {
 }
 
 // Persist + apply on every change
-watch([language, timeFormat, fontSize, autoRefreshInterval], () => {
+watch([language, timeFormat, fontSize, autoRefreshInterval, defaultTimeRange], () => {
   save({
     language:            language.value,
     timeFormat:          timeFormat.value,
     fontSize:            fontSize.value,
     autoRefreshInterval: autoRefreshInterval.value,
+    defaultTimeRange:    defaultTimeRange.value,
   })
   applyFontSize(fontSize.value)
 })
 
 export function usePreferences() {
-  return { language, timeFormat, fontSize, autoRefreshInterval }
+  return { language, timeFormat, fontSize, autoRefreshInterval, defaultTimeRange }
 }

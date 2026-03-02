@@ -10,24 +10,36 @@
         :start-date="startDate"
         :end-date="endDate"
         :severities="severities"
+        :exclude-severities="excludeSeverities"
         :facilities="facilities"
+        :exclude-facilities="excludeFacilities"
         :hosts="hosts"
+        :exclude-hosts="excludeHosts"
         :tags="tags"
+        :exclude-tags="excludeTags"
         :message-search="messageSearch"
         :available-hosts="availableHosts"
         :available-tags="availableTags"
         :available-severities="availableSeverities"
         :available-facilities="availableFacilities"
+        :auto-refresh="autoRefresh"
+        :countdown="countdown"
         @update:timeMode="timeMode = $event"
         @update:relativeDur="relativeDur = $event"
         @update:startDate="startDate = $event"
         @update:endDate="endDate = $event"
         @update:severities="severities = $event"
+        @update:excludeSeverities="excludeSeverities = $event"
         @update:facilities="facilities = $event"
+        @update:excludeFacilities="excludeFacilities = $event"
         @update:hosts="hosts = $event"
+        @update:excludeHosts="excludeHosts = $event"
         @update:tags="tags = $event"
+        @update:excludeTags="excludeTags = $event"
         @update:messageSearch="messageSearch = $event"
         @shift="shiftTimeWindow"
+        @toggle-live="toggleAutoRefresh"
+        @exit-live="stopAutoRefresh"
         @reset="resetFilters"
       />
 
@@ -42,6 +54,7 @@
         <LogTable
           :logs="logs"
           :total="total"
+          :db-total="dbTotal"
           :loading="loading"
           :page="page"
           :page-size="pageSize"
@@ -50,8 +63,8 @@
           :selected-count="selectedCount"
           :detail-id="detailEntry ? detailEntry.ID : null"
           :auto-refresh="autoRefresh"
-          :auto-refresh-interval="autoRefreshInterval"
-          :countdown="countdown"
+          :sidebar-collapsed="!sidebarOpen"
+          :message-search="messageSearch"
           :new-ids="newIds"
           :first-load="firstLoad"
           :show-all="showAll"
@@ -63,7 +76,6 @@
           @export-csv="exportCSV(selectedLogs.length ? selectedLogs : logs)"
           @export-json="exportJSON(selectedLogs.length ? selectedLogs : logs)"
           @set-page="setPage"
-          @toggle-refresh="toggleAutoRefresh"
           @toggle-show-all="showAll = !showAll; fetchLogs()"
         />
       </div>
@@ -83,10 +95,11 @@ import { useLogsStore } from '@/stores/logs'
 import { autoRefreshInterval as prefAutoRefresh, fontSize as prefFontSize } from '@/stores/preferences'
 
 const {
-  logs, total, loading, error,
+  logs, total, dbTotal, loading, error,
   page, pageSize, totalPages, showAll,
   timeMode, relativeDur, startDate, endDate,
-  severities, facilities, hosts, tags, messageSearch,
+  severities, excludeSeverities, facilities, excludeFacilities,
+  hosts, excludeHosts, tags, excludeTags, messageSearch,
   selectedIds, selectedCount, selectedLogs,
   detailEntry,
   availableHosts, availableTags, availableSeverities, availableFacilities,

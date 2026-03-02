@@ -17,7 +17,7 @@ TAGS=("sshd" "nginx" "mysqld" "postfix" "docker")
 until mysqladmin ping -h ${DB_HOST:-localhost} --silent; do sleep 1; done
 
 generate_log() {
-    local sev=$(( (RANDOM % 6) ))
+    local sev=$(( (RANDOM % 8) ))
     local fac=$(( (RANDOM % 24) ))
     local msg="$(slice "${ACT[@]}") $(slice "${OBJ[@]}"): $(slice "${REASON[@]}") ($((1 + RANDOM % 999))ms)"
     local host="$(slice "${HOSTS[@]}")-0$((1 + RANDOM % 5))"

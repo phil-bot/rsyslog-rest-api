@@ -82,6 +82,54 @@ func (b *Builder) AddIntMultiValue(column string, values []int) {
 	b.AddMultiValueFilter(column, ivals)
 }
 
+// AddSeverityExclude adds a NOT IN filter for severity (Priority MOD 8).
+func (b *Builder) AddSeverityExclude(values []int) {
+	if len(values) == 0 {
+		return
+	}
+	placeholders := make([]string, len(values))
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+	b.conditions = append(b.conditions,
+		fmt.Sprintf("Priority MOD 8 NOT IN (%s)", strings.Join(placeholders, ",")))
+	for _, v := range values {
+		b.args = append(b.args, v)
+	}
+}
+
+// AddStringExclude adds a NOT IN filter for a string column.
+func (b *Builder) AddStringExclude(column string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	placeholders := make([]string, len(values))
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+	b.conditions = append(b.conditions,
+		fmt.Sprintf("%s NOT IN (%s)", column, strings.Join(placeholders, ",")))
+	for _, v := range values {
+		b.args = append(b.args, v)
+	}
+}
+
+// AddIntExclude adds a NOT IN filter for an integer column.
+func (b *Builder) AddIntExclude(column string, values []int) {
+	if len(values) == 0 {
+		return
+	}
+	placeholders := make([]string, len(values))
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+	b.conditions = append(b.conditions,
+		fmt.Sprintf("%s NOT IN (%s)", column, strings.Join(placeholders, ",")))
+	for _, v := range values {
+		b.args = append(b.args, v)
+	}
+}
+
 // AddMessageSearch adds LIKE search on Message column; multiple terms use OR.
 func (b *Builder) AddMessageSearch(terms []string) {
 	if len(terms) == 0 {

@@ -15,6 +15,7 @@ type DB struct {
 	*sql.DB
 	AvailableColumns []string
 	PriorityMode     PriorityMode
+	MetaCache        *MetaCache
 }
 
 // Connect establishes a connection to the database using the TOML-based config.
@@ -39,7 +40,7 @@ func Connect(cfg *config.Config) (*DB, error) {
 
 	log.Println("✓ Database connection established")
 
-	db := &DB{DB: sqlDB}
+	db := &DB{DB: sqlDB, MetaCache: NewMetaCache()}
 	if err := db.initialize(); err != nil {
 		return nil, err
 	}

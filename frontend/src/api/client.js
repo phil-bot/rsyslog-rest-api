@@ -23,8 +23,6 @@ async function request(path, options = {}) {
   const res = await fetch(BASE + path, { ...options, headers })
 
   // 401 on protected endpoints → clear session and navigate to login.
-  // Exception: the login endpoint itself — a 401 there just means wrong password,
-  // not an expired session. Let the caller handle it as a normal error.
   if (res.status === 401 && !path.startsWith('/api/admin/login')) {
     sessionStorage.removeItem('rsyslox_token')
     sessionStorage.removeItem('rsyslox_role')
@@ -33,13 +31,17 @@ async function request(path, options = {}) {
     throw new Error('Session expired')
   }
 
+  // Try to parse body as JSON regardless of status
+  const text = await res.text()
+  let data
+  try { data = text ? JSON.parse(text) : null } catch {}
+
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`
-    try { const e = await res.json(); msg = e.message || e.error || msg } catch {}
+    const msg = data?.message || data?.error || `HTTP ${res.status}` + (text ? ': ' + text.slice(0, 120) : '')
     throw new Error(msg)
   }
 
-  return res.json()
+  return data
 }
 
 export const api = {
@@ -66,6 +68,34 @@ export const api = {
 
   updateConfig: (patch) =>
     request('/api/admin/config', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  generateSSL: () =>
+    request('/api/admin/ssl/generate', { method: 'POST' }),
+
+  getDiskUsage: () =>
+    request('/api/admin/disk'),
+
+  restart: () =>
+    request('/api/admin/restart', { method: 'POST' }),
+
+  uploadSSL: (certFile, keyFile) => {
+    const form = new FormData()
+    form.append('cert', certFile)
+    form.append('key',  keyFile)
+    // Do not set Content-Type — browser sets it with boundary automatically
+    const token = sessionStorage.getItem('rsyslox_token')
+    const headers = {}
+    if (token) headers['X-Session-Token'] = token
+    return fetch('/api/admin/ssl/upload', { method: 'POST', headers, body: form })
+      .then(async res => {
+        if (!res.ok) {
+          let msg = `HTTP ${res.status}`
+          try { const e = await res.json(); msg = e.message || e.error || msg } catch {}
+          throw new Error(msg)
+        }
+        return res.json()
+      })
+  },
 
   getKeys: () =>
     request('/api/admin/keys'),

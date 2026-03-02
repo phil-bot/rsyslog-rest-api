@@ -1,11 +1,14 @@
 package models
 
+import "time"
+
 // LogsResponse is the response for the /api/logs endpoint.
 type LogsResponse struct {
-	Total  int        `json:"total"`
-	Offset int        `json:"offset"`
-	Limit  int        `json:"limit"`
-	Rows   []LogEntry `json:"rows"`
+	Total   int        `json:"total"`    // entries matching the active filters
+	DBTotal int        `json:"db_total"` // total entries in SystemEvents (no filter)
+	Offset  int        `json:"offset"`
+	Limit   int        `json:"limit"`
+	Rows    []LogEntry `json:"rows"`
 }
 
 // MetaValue represents a meta value with optional label (for Severity/Facility).
@@ -14,10 +17,12 @@ type MetaValue struct {
 	Label string `json:"label"`
 }
 
-// MetaResponse is the response for the /api/meta endpoint.
+// MetaResponse is the response for the GET /api/meta endpoint.
 type MetaResponse struct {
-	AvailableColumns []string `json:"available_columns"`
-	Usage            string   `json:"usage"`
+	AvailableColumns []string   `json:"available_columns"`
+	Usage            string     `json:"usage"`
+	DBTotal          int        `json:"db_total"`
+	OldestEntry      *time.Time `json:"oldest_entry"`
 }
 
 // HealthResponse is the response for the /health endpoint.

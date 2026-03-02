@@ -100,11 +100,17 @@ func (s *Server) SetupRoutes() {
 	s.router.Handle("/api/admin/logout", cors(logging(authAdmin(logoutHandler))))
 
 	// --- Admin: config and key management (admin token required) ---
-	configHandler := admin.NewConfigHandler(s.cfg)
-	keysHandler := admin.NewKeysHandler(s.cfg)
-	s.router.Handle("/api/admin/config", cors(logging(authAdmin(configHandler))))
-	s.router.Handle("/api/admin/keys", cors(logging(authAdmin(keysHandler))))
-	s.router.Handle("/api/admin/keys/", cors(logging(authAdmin(keysHandler))))
+	configHandler  := admin.NewConfigHandler(s.cfg)
+	keysHandler    := admin.NewKeysHandler(s.cfg)
+	sslHandler     := admin.NewSSLHandler(s.cfg)
+	restartHandler := admin.NewRestartHandler()
+	diskHandler    := admin.NewDiskHandler(s.cfg)
+	s.router.Handle("/api/admin/config",  cors(logging(authAdmin(configHandler))))
+	s.router.Handle("/api/admin/keys",    cors(logging(authAdmin(keysHandler))))
+	s.router.Handle("/api/admin/keys/",   cors(logging(authAdmin(keysHandler))))
+	s.router.Handle("/api/admin/ssl/",    cors(logging(authAdmin(sslHandler))))
+	s.router.Handle("/api/admin/restart", cors(logging(authAdmin(restartHandler))))
+	s.router.Handle("/api/admin/disk",    cors(logging(authAdmin(diskHandler))))
 
 	// --- API: logs and meta (read-only key or admin token) ---
 	logsHandler := handlers.NewLogsHandler(s.db)
@@ -121,6 +127,9 @@ func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port)
 
 	if s.cfg.Server.UseSSL {
+		if err := config.EnsureSSLCerts(&s.cfg.Server); err != nil {
+			return fmt.Errorf("SSL setup failed: %w", err)
+		}
 		log.Printf("Starting HTTPS server on https://%s", addr)
 		return http.ListenAndServeTLS(addr,
 			s.cfg.Server.SSLCertFile,

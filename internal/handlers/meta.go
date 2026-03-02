@@ -42,9 +42,23 @@ func (h *MetaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MetaHandler) handleList(w http.ResponseWriter, r *http.Request) {
+	dbTotal, err := h.db.TotalCount()
+	if err != nil {
+		log.Printf("Meta list: TotalCount error: %v", err)
+		dbTotal = 0
+	}
+
+	oldest, err := h.db.OldestEntryTime()
+	if err != nil {
+		log.Printf("Meta list: OldestEntryTime error: %v", err)
+		oldest = nil
+	}
+
 	respondJSON(w, http.StatusOK, models.MetaResponse{
 		AvailableColumns: h.db.AvailableColumns,
 		Usage:            "GET /api/meta/{column} to get distinct values for a column",
+		DBTotal:          dbTotal,
+		OldestEntry:      oldest,
 	})
 }
 
@@ -89,7 +103,23 @@ func (h *MetaHandler) handleColumnValues(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	excludeSeverities, err := filters.ValidateSeverities(query["ExcludeSeverity"])
+	if err != nil {
+		if apiErr, ok := err.(*models.APIError); ok {
+			respondError(w, http.StatusBadRequest, apiErr)
+		}
+		return
+	}
+
 	facilities, err := filters.ValidateFacilities(query["Facility"])
+	if err != nil {
+		if apiErr, ok := err.(*models.APIError); ok {
+			respondError(w, http.StatusBadRequest, apiErr)
+		}
+		return
+	}
+
+	excludeFacilities, err := filters.ValidateFacilities(query["ExcludeFacility"])
 	if err != nil {
 		if apiErr, ok := err.(*models.APIError); ok {
 			respondError(w, http.StatusBadRequest, apiErr)
@@ -106,10 +136,22 @@ func (h *MetaHandler) handleColumnValues(w http.ResponseWriter, r *http.Request,
 	}
 
 	builder.AddStringMultiValue("FromHost", query["FromHost"])
+	if len(query["FromHost"]) == 0 {
+		builder.AddStringExclude("FromHost", query["ExcludeFromHost"])
+	}
 	builder.AddSeverityFilter(severities)
+	if len(severities) == 0 {
+		builder.AddSeverityExclude(excludeSeverities)
+	}
 	builder.AddIntMultiValue("Facility", facilities)
+	if len(facilities) == 0 {
+		builder.AddIntExclude("Facility", excludeFacilities)
+	}
 	builder.AddMessageSearch(messages)
 	builder.AddStringMultiValue("SysLogTag", query["SysLogTag"])
+	if len(query["SysLogTag"]) == 0 {
+		builder.AddStringExclude("SysLogTag", query["ExcludeSysLogTag"])
+	}
 
 	whereClause, args := builder.Build()
 

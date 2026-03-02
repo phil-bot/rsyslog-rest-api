@@ -2,12 +2,20 @@ package database
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/phil-bot/rsyslox/internal/models"
 )
 
 // QueryLogs executes a paginated log query with the given WHERE clause and args.
+// A copy of args is made internally so the caller's slice is never mutated.
 func (db *DB) QueryLogs(whereClause string, args []interface{}, limit, offset int) ([]models.LogEntry, error) {
+	return db.queryLogsRaw(whereClause, args, limit, offset)
+}
+
+// queryLogsRaw executes the SELECT without mutating the caller's args slice.
+func (db *DB) queryLogsRaw(whereClause string, args []interface{}, limit, offset int) ([]models.LogEntry, error) {
 	query := fmt.Sprintf(`
 		SELECT ID, CustomerID, ReceivedAt, DeviceReportedTime, Facility, Priority,
 		       FromHost, Message, NTSeverity, Importance, EventSource, EventUser,
@@ -20,8 +28,13 @@ func (db *DB) QueryLogs(whereClause string, args []interface{}, limit, offset in
 		LIMIT ? OFFSET ?
 	`, whereClause)
 
-	args = append(args, limit, offset)
-	rows, err := db.Query(query, args...)
+	// Build a fresh slice — do not append to the caller's args.
+	queryArgs := make([]interface{}, len(args)+2)
+	copy(queryArgs, args)
+	queryArgs[len(args)] = limit
+	queryArgs[len(args)+1] = offset
+
+	rows, err := db.Query(query, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %v", err)
 	}
@@ -49,9 +62,106 @@ func (db *DB) CountLogs(whereClause string, args []interface{}) (int, error) {
 	return total, nil
 }
 
+// TotalCount returns the total number of rows in SystemEvents (no filter applied).
+func (db *DB) TotalCount() (int, error) {
+	var total int
+	if err := db.QueryRow("SELECT COUNT(*) FROM SystemEvents").Scan(&total); err != nil {
+		return 0, fmt.Errorf("total count query failed: %v", err)
+	}
+	return total, nil
+}
+
+// OldestEntryTime returns the ReceivedAt timestamp of the oldest log entry.
+// Returns nil when the table is empty.
+func (db *DB) OldestEntryTime() (*time.Time, error) {
+	var t time.Time
+	err := db.QueryRow("SELECT MIN(ReceivedAt) FROM SystemEvents").Scan(&t)
+	if err != nil || t.IsZero() {
+		return nil, nil
+	}
+	return &t, nil
+}
+
+// QueryLogsWithTotal runs CountLogs, QueryLogs and TotalCount in parallel.
+// Returns (entries, filteredTotal, dbTotal, error).
+func (db *DB) QueryLogsWithTotal(whereClause string, args []interface{}, limit, offset int) ([]models.LogEntry, int, int, error) {
+	type countResult struct {
+		n   int
+		err error
+	}
+	type entriesResult struct {
+		rows []models.LogEntry
+		err  error
+	}
+
+	filteredCh := make(chan countResult, 1)
+	dbTotalCh  := make(chan countResult, 1)
+	entriesCh  := make(chan entriesResult, 1)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		n, err := db.CountLogs(whereClause, args)
+		filteredCh <- countResult{n, err}
+	}()
+
+	go func() {
+		defer wg.Done()
+		n, err := db.TotalCount()
+		dbTotalCh <- countResult{n, err}
+	}()
+
+	go func() {
+		defer wg.Done()
+		// queryLogsRaw builds its own args copy — safe to share args here.
+		rows, err := db.queryLogsRaw(whereClause, args, limit, offset)
+		entriesCh <- entriesResult{rows, err}
+	}()
+
+	wg.Wait()
+	close(filteredCh)
+	close(dbTotalCh)
+	close(entriesCh)
+
+	filtered := <-filteredCh
+	dbTotal  := <-dbTotalCh
+	entries  := <-entriesCh
+
+	if filtered.err != nil {
+		return nil, 0, 0, filtered.err
+	}
+	if dbTotal.err != nil {
+		return nil, 0, 0, dbTotal.err
+	}
+	if entries.err != nil {
+		return nil, 0, 0, entries.err
+	}
+
+	return entries.rows, filtered.n, dbTotal.n, nil
+}
+
 // QueryDistinctValues returns distinct values for a column, with optional filters.
+// Results are cached for metaCacheTTL (60 s) to reduce redundant DB round-trips.
 // "Severity" is a virtual column computed from Priority MOD 8.
 func (db *DB) QueryDistinctValues(column, whereClause string, args []interface{}) (interface{}, error) {
+	key := CacheKey(column, whereClause, args)
+	if cached, ok := db.MetaCache.Get(key); ok {
+		return cached, nil
+	}
+
+	result, err := db.queryDistinctValuesUncached(column, whereClause, args)
+	if err != nil {
+		return nil, err
+	}
+
+	db.MetaCache.Set(key, result)
+	return result, nil
+}
+
+// queryDistinctValuesUncached performs the actual DB query without consulting the cache.
+func (db *DB) queryDistinctValuesUncached(column, whereClause string, args []interface{}) (interface{}, error) {
 	if column == "Severity" {
 		return db.queryDistinctSeverity(whereClause, args)
 	}

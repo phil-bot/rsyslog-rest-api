@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { api } from '@/api/client'
+import { defaultTimeRange } from '@/stores/preferences'
 
 // Severity labels (RFC 5424)
 export const SEVERITY_LABELS = {
@@ -19,6 +20,7 @@ export const FACILITY_LABELS = {
 // --- Reactive state ---
 const logs        = ref([])
 const total       = ref(0)
+const dbTotal     = ref(0)    // total entries in SystemEvents (no filter)
 const loading     = ref(false)
 const error       = ref(null)
 
@@ -27,18 +29,36 @@ const page        = ref(1)
 const pageSize    = ref(15)
 const showAll     = ref(false)  // toggle: show all vs paginated
 
-// Time filter
-const timeMode    = ref('relative')   // 'relative' | 'absolute'
-const relativeDur = ref('1h')         // '15m','1h','6h','24h','7d','30d'
-const startDate   = ref('')
-const endDate     = ref('')
+// Duration -> ms helper (also used in buildDateParams / resetFilters)
+const DURATION_MS = {
+  '15m': 15*60*1000, '1h': 60*60*1000, '6h': 6*60*60*1000,
+  '24h': 24*60*60*1000, '7d': 7*24*60*60*1000, '30d': 30*24*60*60*1000,
+}
+
+function durationDates(dur) {
+  const now  = new Date()
+  const from = new Date(now - (DURATION_MS[dur] ?? DURATION_MS['1h']))
+  const fmt  = d => d.toISOString().slice(0, 16)
+  return { from: fmt(from), to: fmt(now) }
+}
+
+// Time filter — initialized from the user's default time range preference
+const timeMode    = ref('absolute')
+const relativeDur = ref(defaultTimeRange.value)
+const { from: _initFrom, to: _initTo } = durationDates(defaultTimeRange.value)
+const startDate   = ref(_initFrom)
+const endDate     = ref(_initTo)
 
 // Filters
-const severities  = ref([])           // selected severity values []int
-const facilities  = ref([])
-const hosts       = ref([])
-const tags        = ref([])
-const messageSearch = ref('')
+const severities         = ref([])  // included severity values
+const excludeSeverities  = ref([])
+const facilities         = ref([])
+const excludeFacilities  = ref([])
+const hosts              = ref([])
+const excludeHosts       = ref([])
+const tags               = ref([])
+const excludeTags        = ref([])
+const messageSearch      = ref('')
 
 // Selection
 const selectedIds = ref(new Set())
@@ -47,19 +67,19 @@ const selectedIds = ref(new Set())
 const detailEntry = ref(null)
 
 // Available filter options (from /meta)
-const availableHosts = ref([])
+const availableHosts       = ref([])
 const availableTags        = ref([])
 const availableSeverities  = ref([])   // [{val, label}] from /api/meta/Severity
 const availableFacilities  = ref([])   // [{val, label}] from /api/meta/Facility
 
-// Auto-refresh
-const autoRefresh        = ref(true)
-const newIds             = ref(new Set())  // IDs of freshly loaded rows → flash animation
-const firstLoad          = ref(true)         // true until first successful fetch completes
-const countdown          = ref(0)            // seconds until next auto-refresh
-const autoRefreshInterval = ref(30)   // seconds
-let   refreshTimer       = null
-let   countdownTimer     = null
+// Auto-refresh / live mode
+const autoRefresh         = ref(true)
+const newIds              = ref(new Set())  // IDs of freshly loaded rows → flash animation
+const firstLoad           = ref(true)       // true until first successful fetch completes
+const countdown           = ref(0)          // seconds until next auto-refresh
+const autoRefreshInterval = ref(30)         // seconds
+let   refreshTimer        = null
+let   countdownTimer      = null
 
 // --- Computed ---
 const offset = computed(() => (page.value - 1) * pageSize.value)
@@ -77,20 +97,16 @@ const selectedLogs = computed(() =>
 // --- Helpers ---
 function buildDateParams() {
   if (timeMode.value === 'absolute') {
-    // datetime-local gives "YYYY-MM-DDTHH:MM" — append seconds + Z for RFC3339
     const toRFC = v => v ? (v.length === 16 ? v + ':00Z' : v.endsWith('Z') ? v : v + 'Z') : v
-    return { start_date: toRFC(startDate.value), end_date: toRFC(endDate.value) }
+    // In live mode the end is always "now" so the API always gets a fresh window,
+    // even if endDate is visually stale between refreshes.
+    const endStr = autoRefresh.value
+      ? new Date().toISOString().slice(0, 19) + 'Z'
+      : toRFC(endDate.value)
+    return { start_date: toRFC(startDate.value), end_date: endStr }
   }
   const now  = new Date()
-  const durations = {
-    '15m': 15 * 60 * 1000,
-    '1h':  60 * 60 * 1000,
-    '6h':  6  * 60 * 60 * 1000,
-    '24h': 24 * 60 * 60 * 1000,
-    '7d':  7  * 24 * 60 * 60 * 1000,
-    '30d': 30 * 24 * 60 * 60 * 1000,
-  }
-  const ms = durations[relativeDur.value] ?? durations['1h']
+  const ms   = DURATION_MS[relativeDur.value] ?? DURATION_MS['1h']
   const from = new Date(now - ms)
   // Backend requires RFC3339 format: 2025-02-15T10:00:00Z
   return {
@@ -106,11 +122,15 @@ function buildParams() {
     ...buildDateParams()
   }
   // Pass arrays — the API client serializes them as repeated params (?Severity=4&Severity=5)
-  if (severities.value.length)  params['Severity']  = severities.value
-  if (facilities.value.length)  params['Facility']  = facilities.value
-  if (hosts.value.length)       params['FromHost']  = hosts.value
-  if (tags.value.length)        params['SysLogTag'] = tags.value
-  if (messageSearch.value.trim()) params['Message'] = messageSearch.value.trim()
+  if (severities.value.length)        params['Severity']        = severities.value
+  if (excludeSeverities.value.length) params['ExcludeSeverity'] = excludeSeverities.value
+  if (facilities.value.length)        params['Facility']        = facilities.value
+  if (excludeFacilities.value.length) params['ExcludeFacility'] = excludeFacilities.value
+  if (hosts.value.length)             params['FromHost']        = hosts.value
+  if (excludeHosts.value.length)      params['ExcludeFromHost'] = excludeHosts.value
+  if (tags.value.length)              params['SysLogTag']       = tags.value
+  if (excludeTags.value.length)       params['ExcludeSysLogTag']= excludeTags.value
+  if (messageSearch.value.trim())     params['Message']         = messageSearch.value.trim()
   return params
 }
 
@@ -133,8 +153,9 @@ async function fetchLogs(fromRefresh = false) {
       }
     }
 
-    logs.value  = rows
-    total.value = res.total ?? 0
+    logs.value    = rows
+    total.value   = res.total    ?? 0
+    dbTotal.value = res.db_total ?? 0
     firstLoad.value = false
   } catch (e) {
     error.value = e.message || 'Failed to load logs'
@@ -227,8 +248,17 @@ function setPageSize(n) {
 
 function toggleAutoRefresh() {
   autoRefresh.value = !autoRefresh.value
-  if (autoRefresh.value) startAutoRefresh(autoRefreshInterval.value)
-  else stopAutoRefresh()
+  if (autoRefresh.value) {
+    // Reset the time window so "live" always shows the expected recent range,
+    // not wherever the user happened to be navigating before.
+    const { from, to } = durationDates(relativeDur.value)
+    startDate.value = from
+    endDate.value   = to
+    timeMode.value  = 'absolute'
+    startAutoRefresh(autoRefreshInterval.value)
+  } else {
+    stopAutoRefresh()
+  }
 }
 
 // Export helpers
@@ -258,20 +288,25 @@ function download(content, filename, mime) {
 
 // Reset filters and re-fetch
 function resetFilters() {
-  severities.value    = []
-  facilities.value    = []
-  hosts.value         = []
-  tags.value          = []
+  severities.value        = []
+  excludeSeverities.value = []
+  facilities.value        = []
+  excludeFacilities.value = []
+  hosts.value             = []
+  excludeHosts.value      = []
+  tags.value              = []
+  excludeTags.value       = []
   messageSearch.value = ''
-  relativeDur.value   = '1h'
-  timeMode.value      = 'relative'
-  startDate.value     = ''
-  endDate.value       = ''
+  relativeDur.value   = defaultTimeRange.value
+  timeMode.value      = 'absolute'
+  const { from: _rf, to: _rt } = durationDates(defaultTimeRange.value)
+  startDate.value     = _rf
+  endDate.value       = _rt
   resetPage()
 }
 
 // Watch filter changes → reset page and re-fetch
-watch([severities, facilities, hosts, tags, messageSearch, relativeDur, startDate, endDate], () => {
+watch([severities, excludeSeverities, facilities, excludeFacilities, hosts, excludeHosts, tags, excludeTags, messageSearch, relativeDur, startDate, endDate], () => {
   resetPage()
   fetchLogs()
 }, { deep: true })
@@ -281,10 +316,11 @@ watch(page, () => fetchLogs())  // arrow wrapper: prevents page value being pass
 export function useLogsStore() {
   return {
     // state
-    logs, total, loading, error,
+    logs, total, dbTotal, loading, error,
     page, pageSize, offset, totalPages, showAll,
     timeMode, relativeDur, startDate, endDate,
-    severities, facilities, hosts, tags, messageSearch,
+    severities, excludeSeverities, facilities, excludeFacilities,
+    hosts, excludeHosts, tags, excludeTags, messageSearch,
     selectedIds, selectedCount, selectedLogs,
     detailEntry,
     availableHosts, availableTags, availableSeverities, availableFacilities,

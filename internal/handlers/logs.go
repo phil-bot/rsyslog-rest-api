@@ -69,8 +69,30 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	excludeSeverities, err := filters.ValidateSeverities(query["ExcludeSeverity"])
+	if err != nil {
+		if apiErr, ok := err.(*models.APIError); ok {
+			respondError(w, http.StatusBadRequest, apiErr)
+		} else {
+			respondError(w, http.StatusBadRequest,
+				models.NewAPIError(models.ErrCodeInvalidSeverity, err.Error()))
+		}
+		return
+	}
+
 	// Facility
 	facilities, err := filters.ValidateFacilities(query["Facility"])
+	if err != nil {
+		if apiErr, ok := err.(*models.APIError); ok {
+			respondError(w, http.StatusBadRequest, apiErr)
+		} else {
+			respondError(w, http.StatusBadRequest,
+				models.NewAPIError(models.ErrCodeInvalidFacility, err.Error()))
+		}
+		return
+	}
+
+	excludeFacilities, err := filters.ValidateFacilities(query["ExcludeFacility"])
 	if err != nil {
 		if apiErr, ok := err.(*models.APIError); ok {
 			respondError(w, http.StatusBadRequest, apiErr)
@@ -97,24 +119,27 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	builder := filters.New()
 	builder.AddDateRange(startDate, endDate)
 	builder.AddStringMultiValue("FromHost", query["FromHost"])
+	if len(query["FromHost"]) == 0 {
+		builder.AddStringExclude("FromHost", query["ExcludeFromHost"])
+	}
 	builder.AddSeverityFilter(severities)
+	if len(severities) == 0 {
+		builder.AddSeverityExclude(excludeSeverities)
+	}
 	builder.AddIntMultiValue("Facility", facilities)
+	if len(facilities) == 0 {
+		builder.AddIntExclude("Facility", excludeFacilities)
+	}
 	builder.AddMessageSearch(messages)
 	builder.AddStringMultiValue("SysLogTag", query["SysLogTag"])
+	if len(query["SysLogTag"]) == 0 {
+		builder.AddStringExclude("SysLogTag", query["ExcludeSysLogTag"])
+	}
 
 	whereClause, args := builder.Build()
 
-	// Count total
-	total, err := h.db.CountLogs(whereClause, args)
-	if err != nil {
-		log.Printf("Count query error: %v", err)
-		respondError(w, http.StatusInternalServerError,
-			models.NewAPIError(models.ErrCodeDatabaseError, "Failed to count logs"))
-		return
-	}
-
-	// Query page
-	entries, err := h.db.QueryLogs(whereClause, args, limit, offset)
+	// Run CountLogs, QueryLogs and TotalCount in parallel.
+	entries, total, dbTotal, err := h.db.QueryLogsWithTotal(whereClause, args, limit, offset)
 	if err != nil {
 		log.Printf("Query error: %v", err)
 		respondError(w, http.StatusInternalServerError,
@@ -123,9 +148,10 @@ func (h *LogsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, models.LogsResponse{
-		Total:  total,
-		Offset: offset,
-		Limit:  limit,
-		Rows:   entries,
+		Total:   total,
+		DBTotal: dbTotal,
+		Offset:  offset,
+		Limit:   limit,
+		Rows:    entries,
 	})
 }

@@ -100,10 +100,12 @@ func (s *Server) SetupRoutes() {
 
 	// --- Admin: config and key management (admin token required) ---
 	configHandler := admin.NewConfigHandler(s.cfg)
-	keysHandler := admin.NewKeysHandler(s.cfg)
+	keysHandler   := admin.NewKeysHandler(s.cfg)
+	sslHandler    := admin.NewSSLHandler(s.cfg)
 	s.router.Handle("/api/admin/config", cors(logging(authAdmin(configHandler))))
-	s.router.Handle("/api/admin/keys", cors(logging(authAdmin(keysHandler))))
-	s.router.Handle("/api/admin/keys/", cors(logging(authAdmin(keysHandler))))
+	s.router.Handle("/api/admin/keys",   cors(logging(authAdmin(keysHandler))))
+	s.router.Handle("/api/admin/keys/",  cors(logging(authAdmin(keysHandler))))
+	s.router.Handle("/api/admin/ssl/",   cors(logging(authAdmin(sslHandler))))
 
 	// --- API: logs and meta (read-only key or admin token) ---
 	logsHandler := handlers.NewLogsHandler(s.db)

@@ -9,6 +9,7 @@ import (
 )
 
 // ValidateDateRange parses and validates start/end date strings (RFC3339).
+// No upper bound is enforced on the date range.
 func ValidateDateRange(startDateStr, endDateStr string) (time.Time, time.Time, error) {
 	var startDate, endDate time.Time
 	var err error
@@ -41,13 +42,6 @@ func ValidateDateRange(startDateStr, endDateStr string) (time.Time, time.Time, e
 		return time.Time{}, time.Time{}, models.NewAPIError(
 			models.ErrCodeInvalidDateRange,
 			"start_date cannot be after end_date")
-	}
-
-	if endDate.Sub(startDate) > 90*24*time.Hour {
-		return time.Time{}, time.Time{}, models.NewAPIError(
-			models.ErrCodeInvalidDateRange,
-			"date range cannot exceed 90 days").
-			WithDetails(fmt.Sprintf("Requested range: %.1f days", endDate.Sub(startDate).Hours()/24))
 	}
 
 	return startDate, endDate, nil
@@ -102,7 +96,7 @@ func ValidatePagination(limitStr, offsetStr string) (int, int, error) {
 }
 
 // ValidateSeverities parses a slice of severity string values (0-7).
-// Returns an empty slice (no filter) when input is empty.
+// Returns nil (no filter) when input is empty.
 func ValidateSeverities(params []string) ([]int, error) {
 	if len(params) == 0 {
 		return nil, nil
@@ -121,7 +115,7 @@ func ValidateSeverities(params []string) ([]int, error) {
 }
 
 // ValidateFacilities parses a slice of facility string values (0-23).
-// Returns an empty slice (no filter) when input is empty.
+// Returns nil (no filter) when input is empty.
 func ValidateFacilities(params []string) ([]int, error) {
 	if len(params) == 0 {
 		return nil, nil

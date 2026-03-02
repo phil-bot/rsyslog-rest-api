@@ -13,34 +13,34 @@
           <template v-if="!loading">
             <span>{{ fmtNumber(total) }}</span>
             <span class="of-label">{{ t('table.entries') }}</span>
+            <template v-if="dbTotal > 0 && dbTotal !== total">
+              <span class="of-label">·</span>
+              <span>{{ fmtNumber(dbTotal) }}</span>
+              <span class="of-label">{{ t('table.db_total') }}</span>
+            </template>
           </template>
           <span v-else class="loading-pulse">{{ t('table.loading') }}</span>
         </span>
+
       </div>
 
       <div class="toolbar-right">
+        <!-- Live indicator — only shown when filter sidebar is collapsed -->
+        <span v-if="autoRefresh && sidebarCollapsed" class="live-badge">
+          <span class="live-badge-dot"></span>
+          {{ t('table.live') }}
+        </span>
+
         <!-- View mode: paginated vs. all -->
         <button
           class="ctrl-btn"
           :class="{ active: showAll }"
           @click="$emit('toggle-show-all')"
-          :title="showAll ? 'Seitenweise anzeigen' : 'Alle Einträge laden'"
+          :title="showAll ? t('table.view_multipage') : t('table.view_singlepage')"
         >
           <svg v-if="!showAll" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           {{ showAll ? t('table.view_multipage') : t('table.view_singlepage') }}
-        </button>
-
-        <!-- Auto-Refresh -->
-        <button
-          class="ctrl-btn"
-          :class="{ active: autoRefresh }"
-          @click="$emit('toggle-refresh')"
-          :title="autoRefresh ? `Auto-Refresh alle ${autoRefreshInterval}s – klicken zum Deaktivieren` : 'Auto-Refresh aktivieren'"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          <template v-if="autoRefresh">{{ countdown > 0 ? countdown : autoRefreshInterval }}s</template>
-          <template v-else>{{ t('table.refresh') }}</template>
         </button>
       </div>
     </div>
@@ -110,7 +110,7 @@
               <td class="col-fac mono">{{ entry.Facility_Label || entry.Facility }}</td>
               <td class="col-host mono">{{ entry.FromHost }}</td>
               <td class="col-tag mono">{{ trimTag(entry.SysLogTag) }}</td>
-              <td class="col-msg mono">{{ entry.Message }}</td>
+              <td class="col-msg mono" v-html="highlightMessage(entry.Message)"></td>
             </tr>
           </template>
         </tbody>
@@ -134,21 +134,22 @@ import { useLocale } from '@/composables/useLocale'
 import { timeFormat } from '@/stores/preferences'
 
 const props = defineProps({
-  logs:                { type: Array,   default: () => [] },
-  total:               { type: Number,  default: 0 },
-  loading:             { type: Boolean, default: false },
-  page:                { type: Number,  default: 1 },
-  pageSize:            { type: Number,  default: 20 },
-  totalPages:          { type: Number,  default: 1 },
-  selectedIds:         { type: Object,  default: () => new Set() },
-  selectedCount:       { type: Number,  default: 0 },
-  detailId:            { type: [Number, null], default: null },
-  autoRefresh:         { type: Boolean, default: false },
-  autoRefreshInterval: { type: Number,  default: 30 },
-  newIds:              { type: Object,  default: () => new Set() },
-  countdown:           { type: Number,  default: 0 },
-  showAll:             { type: Boolean, default: false },
-  firstLoad:           { type: Boolean, default: true },
+  logs:              { type: Array,          default: () => [] },
+  total:             { type: Number,         default: 0 },
+  dbTotal:           { type: Number,         default: 0 },
+  loading:           { type: Boolean,        default: false },
+  page:              { type: Number,         default: 1 },
+  pageSize:          { type: Number,         default: 20 },
+  totalPages:        { type: Number,         default: 1 },
+  selectedIds:       { type: Object,         default: () => new Set() },
+  selectedCount:     { type: Number,         default: 0 },
+  detailId:          { type: [Number, null], default: null },
+  autoRefresh:       { type: Boolean,        default: false },
+  sidebarCollapsed:  { type: Boolean,        default: false },
+  newIds:            { type: Object,         default: () => new Set() },
+  showAll:           { type: Boolean,        default: false },
+  firstLoad:         { type: Boolean,        default: true },
+  messageSearch:     { type: String,         default: '' },
 })
 
 defineEmits([
@@ -156,7 +157,6 @@ defineEmits([
   'toggle-selection', 'toggle-select-all', 'clear-selection',
   'export-csv', 'export-json',
   'set-page',
-  'toggle-refresh',
   'toggle-show-all',
 ])
 
@@ -180,8 +180,19 @@ function trimTag(tag) {
   return tag.replace(/[:\[]+\d*\]?$/, '').trim()
 }
 
+function highlightMessage(text) {
+  if (!props.messageSearch || !text) return escapeHtml(text ?? '')
+  const escaped  = escapeHtml(text)
+  const term     = escapeHtml(props.messageSearch)
+  const re       = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  return escaped.replace(re, m => `<mark class="msg-hl">${m}</mark>`)
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
 function formatTime(ts) {
-  if (!ts) return ''
   const d = new Date(ts)
   if (isNaN(d)) return ts
   const pad = n => String(n).padStart(2, '0')
@@ -233,7 +244,28 @@ function formatTime(ts) {
 .toolbar-btn.danger:hover { background: #fef2f2; }
 [data-theme="dark"] .toolbar-btn.danger:hover { background: #2d1212; }
 
-/* Unified control buttons — view mode toggle + auto-refresh */
+/* Live badge */
+.live-badge {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .75rem; font-weight: 600;
+  color: var(--color-primary);
+  padding: .15rem .45rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--bg-selected);
+  user-select: none;
+}
+.live-badge-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--color-primary);
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .45; transform: scale(.7); }
+}
+
+/* Unified control buttons */
 .ctrl-btn {
   display: inline-flex; align-items: center; gap: .35rem;
   padding: .28rem .6rem; font-size: .8rem;
@@ -368,4 +400,18 @@ function formatTime(ts) {
 .pag-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--color-primary); }
 .pag-btn:disabled { opacity: .35; cursor: default; }
 .pag-info { font-size: .8rem; color: var(--text-muted); padding: 0 .375rem; }
+</style>
+
+<style>
+/* Global — needed because v-html content is not subject to scoped styles */
+.msg-hl {
+  background: #fef08a;
+  color: #713f12;
+  border-radius: 2px;
+  padding: 0 .1rem;
+}
+[data-theme="dark"] .msg-hl {
+  background: #854d0e;
+  color: #fef9c3;
+}
 </style>

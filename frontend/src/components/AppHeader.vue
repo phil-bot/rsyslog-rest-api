@@ -1,20 +1,23 @@
 <template>
   <header class="app-header">
     <div class="header-left">
-      <button class="icon-btn" @click="$emit('toggle-sidebar')" :title="t('nav.toggle_sidebar')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
       <a href="/logs" class="logo-link">
         <img :src="logoSrc" alt="rsyslox" class="logo-img" />
       </a>
+      <button class="icon-btn filter-toggle" @click="$emit('toggle-sidebar')" :title="t('nav.toggle_sidebar')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+      </button>
     </div>
 
     <nav class="header-nav">
       <RouterLink to="/logs" class="nav-item" :class="{ active: route.path === '/logs' }">
         {{ t('nav.logs') }}
       </RouterLink>
+      <span class="nav-item nav-item--soon" :title="t('nav.statistics_soon')">
+        {{ t('nav.statistics') }}
+      </span>
     </nav>
 
     <div class="header-right">
@@ -44,22 +47,6 @@
       </button>
 
       <!-- Admin / Settings — icon button, right side -->
-      <RouterLink v-if="auth.isAdmin" to="/admin" class="icon-btn"
-        :class="{ 'icon-btn--active': route.path.startsWith('/admin') }"
-        :title="t('nav.admin')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06
-                   a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09
-                   A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06
-                   A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09
-                   A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06
-                   A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09
-                   a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06
-                   A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09
-                   a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-      </RouterLink>
 
       <!-- User / Account menu -->
       <div class="user-menu" ref="userMenuRef">
@@ -69,6 +56,10 @@
           </svg>
         </button>
         <div v-if="userMenuOpen" class="dropdown">
+          <RouterLink v-if="auth.isAdmin" to="/admin" class="dropdown-item" @click="userMenuOpen = false">
+            {{ t('nav.settings') }}
+          </RouterLink>
+          <div v-if="auth.isAdmin" class="dropdown-divider"></div>
           <button class="dropdown-item" @click="logout">{{ t('nav.logout') }}</button>
         </div>
       </div>
@@ -148,12 +139,21 @@ async function logout() {
   border-radius: var(--radius); box-shadow: var(--shadow);
   min-width: 130px; z-index: 200;
 }
-.dropdown-item {
-  display: block; width: 100%; text-align: left;
+.dropdown-item { display: block; width: 100%; text-align: left;
   padding: .5rem .75rem; background: none; border: none;
   cursor: pointer; font-size: .875rem; color: var(--text);
+  text-decoration: none;
 }
 .dropdown-item:hover { background: var(--bg-hover); }
+.dropdown-divider { height: 1px; background: var(--border); margin: .25rem 0; }
+
+.filter-toggle { margin-left: .25rem; }
+
+.nav-item--soon {
+  color: var(--text-muted); opacity: .4;
+  cursor: default; pointer-events: none;
+  font-style: italic;
+}
 
 @media (max-width: 380px) { .header-nav { display: none; } }
 </style>
